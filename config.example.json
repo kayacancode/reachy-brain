@@ -13,13 +13,45 @@
     "name": "ReachyBot",
     "personality": "A friendly robot assistant that loves to help"
   },
-  "tts": {
-    "provider": "chatterbox",
-    "huggingface_space": "ResembleAI/chatterbox-turbo-demo"
-  },
+  "_comment_stt": "Speech-to-Text configuration",
   "stt": {
-    "provider": "whisper",
-    "model": "base"
+    "_comment": "provider: 'faster-whisper' (recommended, 2-4x faster) or 'whisper' (original)",
+    "provider": "faster-whisper",
+    "model": "base",
+    "_model_options": "tiny, base (recommended), small, medium, large",
+    "device": "cpu",
+    "_device_options": "cpu or cuda (if GPU available)",
+    "compute_type": "int8",
+    "_compute_type_options": "int8 (fastest), float16, float32"
+  },
+  "_comment_tts": "Text-to-Speech configuration",
+  "tts": {
+    "_comment": "provider: 'piper' (recommended, fast & local), 'chatterbox' (high quality, cloud), 'macos' (system voice)",
+    "provider": "piper",
+    "piper_voice": "en_US-lessac-medium",
+    "_piper_voice_options": "en_US-lessac-medium, en_US-ryan-high, en_GB-alan-medium, etc.",
+    "cache_enabled": true,
+    "_cache_comment": "Cache TTS output for faster repeated phrases",
+    "cache_dir": "~/.cache/reachy-tts",
+    "fallback_to_macos": true,
+    "_fallback_comment": "Use macOS 'say' if piper fails",
+    "fallback_to_chatterbox": false,
+    "chatterbox_space": "ResembleAI/chatterbox-turbo-demo"
+  },
+  "_comment_wake_word": "Wake word detection configuration",
+  "wake_word": {
+    "_comment": "Enable hands-free voice activation",
+    "enabled": true,
+    "bot_name": "OpenClaw",
+    "_bot_name_comment": "Set to your bot's name. Train custom model with: python scripts/train_wake_word.py --bot-name YourBotName --record",
+    "model_path": "~/.config/reachy-brain/wake_words/{bot_name}.onnx",
+    "_model_path_comment": "Path to custom wake word model. If not found, uses pre-trained 'alexa' model",
+    "threshold": 0.5,
+    "_threshold_comment": "Detection threshold (0.0-1.0). Higher = fewer false positives. Recommended: 0.5",
+    "confirmation_sound": true,
+    "_confirmation_sound_comment": "Play sound when wake word detected",
+    "antenna_response": true,
+    "_antenna_response_comment": "Move Reachy antennas when wake word detected"
   },
   "clawdbot": {
     "host": "localhost",

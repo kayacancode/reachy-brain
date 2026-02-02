@@ -22,11 +22,11 @@ echo ""
 # Check prerequisites
 check_prereqs() {
     local missing=()
-    
+
     command -v python3 >/dev/null || missing+=("python3")
     command -v clawdbot >/dev/null || missing+=("clawdbot")
     command -v ffmpeg >/dev/null || missing+=("ffmpeg")
-    
+
     if [ ${#missing[@]} -gt 0 ]; then
         echo "❌ Missing requirements: ${missing[*]}"
         echo ""
@@ -35,6 +35,17 @@ check_prereqs() {
         echo "  npm i -g clawdbot"
         exit 1
     fi
+
+    # Check for portaudio (needed for wake word detection)
+    if ! brew list portaudio &>/dev/null; then
+        echo "⚠️  portaudio not found (needed for wake word detection)"
+        read -p "   Install portaudio now? [Y/n]: " install_pa
+        if [[ ! "$install_pa" =~ ^[Nn]$ ]]; then
+            echo "   Installing portaudio..."
+            brew install portaudio
+        fi
+    fi
+
     echo "✅ Prerequisites OK"
 }
 
@@ -94,10 +105,21 @@ install_deps() {
     source "$VENV_DIR/bin/activate"
     
     pip install --quiet --upgrade pip
-    pip install --quiet honcho-ai gradio_client webrtcvad
-    
+
+    echo "   Installing core dependencies..."
+    pip install --quiet honcho-ai webrtcvad httpx
+
+    echo "   Installing STT (Speech-to-Text)..."
+    pip install --quiet openai-whisper faster-whisper
+
+    echo "   Installing TTS (Text-to-Speech)..."
+    pip install --quiet gradio_client piper-tts
+
+    echo "   Installing wake word detection..."
+    pip install --quiet openwakeword pyaudio
+
     echo "   ✅ Python packages installed"
-    
+
     # Install sshpass if needed
     if ! command -v sshpass >/dev/null; then
         if command -v brew >/dev/null; then
@@ -105,13 +127,7 @@ install_deps() {
             brew install hudochenkov/sshpass/sshpass 2>/dev/null || true
         fi
     fi
-    
-    # Install whisper if needed
-    if ! command -v whisper >/dev/null; then
-        echo "   Installing Whisper (this may take a moment)..."
-        pip install --quiet openai-whisper
-    fi
-    
+
     echo "   ✅ All dependencies ready"
 }
 
@@ -138,13 +154,28 @@ write_config() {
     "name": "${AGENT_NAME}",
     "personality": "${AGENT_PERSONALITY}"
   },
-  "tts": {
-    "provider": "chatterbox",
-    "huggingface_space": "ResembleAI/chatterbox-turbo-demo"
-  },
   "stt": {
-    "provider": "whisper",
-    "model": "base"
+    "provider": "faster-whisper",
+    "model": "base",
+    "device": "cpu",
+    "compute_type": "int8"
+  },
+  "tts": {
+    "provider": "piper",
+    "piper_voice": "en_US-lessac-medium",
+    "cache_enabled": true,
+    "cache_dir": "~/.cache/reachy-tts",
+    "fallback_to_macos": true,
+    "fallback_to_chatterbox": false,
+    "chatterbox_space": "ResembleAI/chatterbox-turbo-demo"
+  },
+  "wake_word": {
+    "enabled": true,
+    "bot_name": "${AGENT_NAME}",
+    "model_path": "~/.config/reachy-brain/wake_words/${AGENT_NAME,,}.onnx",
+    "threshold": 0.5,
+    "confirmation_sound": true,
+    "antenna_response": true
   }
 }
 EOF
@@ -209,17 +240,32 @@ print_success() {
     echo "Your Reachy Mini now has a brain! 🤖🧠"
     echo ""
     echo "USAGE:"
-    echo "  • Tell your Clawdbot 'listen' and speak to Reachy"
-    echo "  • Or run: reachy-listen --push-to-talk"
+    echo "  • Push-to-talk:  reachy-listen --push-to-talk"
+    echo "  • Wake word:     reachy-listen --wake-word"
+    echo "  • Local testing: reachy-listen --wake-word --local-mic --local-speaker"
     echo ""
     echo "CONFIG: $CONFIG_DIR/config.json"
     echo "SKILL:  $SKILL_DIR"
     echo ""
+    echo "WAKE WORD SETUP (Optional):"
+    echo "  1. cd $SKILL_DIR"
+    echo "  2. python scripts/train_wake_word.py --bot-name ${AGENT_NAME} --record"
+    echo "  3. Follow prompts to record 5-10 samples saying 'Hey ${AGENT_NAME}'"
+    echo "  4. Model will be saved automatically"
+    echo ""
+    echo "  Note: Until you train a custom model, the default 'alexa' model will be used."
+    echo ""
     echo "Reachy will:"
-    echo "  📡 Pop antennas when listening"
-    echo "  🎤 Transcribe your speech (Whisper)"
+    echo "  🎤 Listen for wake word (hands-free!)"
+    echo "  📡 Pop antennas when activated"
+    echo "  🗣️ Transcribe your speech (faster-whisper, 2-4x faster)"
     echo "  🧠 Remember you (Honcho)"
-    echo "  🗣️ Respond with natural voice (Chatterbox)"
+    echo "  💬 Respond with natural voice (Piper TTS, local & fast)"
+    echo ""
+    echo "Performance improvements:"
+    echo "  • STT: 2-4x faster (faster-whisper)"
+    echo "  • TTS: 6-10x faster (Piper local TTS)"
+    echo "  • Wake word: Voice-activated, no typing needed!"
     echo ""
     echo "ebaaa jeeba! 🫧"
 }

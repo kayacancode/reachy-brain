@@ -23,13 +23,28 @@ DEFAULT_CONFIG = {
         "name": "ReachyBot",
         "personality": "A friendly robot assistant"
     },
-    "tts": {
-        "provider": "chatterbox",
-        "huggingface_space": "ResembleAI/chatterbox-turbo-demo"
-    },
     "stt": {
-        "provider": "whisper",
-        "model": "base"
+        "provider": "faster-whisper",  # or "whisper" for original
+        "model": "base",
+        "device": "cpu",
+        "compute_type": "int8"
+    },
+    "tts": {
+        "provider": "piper",  # piper, chatterbox, macos
+        "piper_voice": "en_US-lessac-medium",
+        "cache_enabled": True,
+        "cache_dir": "~/.cache/reachy-tts",
+        "fallback_to_macos": True,
+        "fallback_to_chatterbox": False,
+        "chatterbox_space": "ResembleAI/chatterbox-turbo-demo"
+    },
+    "wake_word": {
+        "enabled": True,
+        "bot_name": "OpenClaw",
+        "model_path": "~/.config/reachy-brain/wake_words/{bot_name}.onnx",
+        "threshold": 0.5,
+        "confirmation_sound": True,
+        "antenna_response": True
     },
     "clawdbot": {
         "host": "localhost",
@@ -66,7 +81,21 @@ def load_config() -> dict:
         "CLAWDBOT_HOST": ("clawdbot", "host"),
         "CLAWDBOT_PORT": ("clawdbot", "port"),
         "CLAWDBOT_TOKEN": ("clawdbot", "token"),
+        # STT
+        "STT_PROVIDER": ("stt", "provider"),
         "WHISPER_MODEL": ("stt", "model"),
+        "WHISPER_DEVICE": ("stt", "device"),
+        "WHISPER_COMPUTE_TYPE": ("stt", "compute_type"),
+        # TTS
+        "TTS_PROVIDER": ("tts", "provider"),
+        "PIPER_VOICE": ("tts", "piper_voice"),
+        "TTS_CACHE_ENABLED": ("tts", "cache_enabled"),
+        # Wake word
+        "WAKE_WORD_ENABLED": ("wake_word", "enabled"),
+        "WAKE_WORD_BOT_NAME": ("wake_word", "bot_name"),
+        "WAKE_WORD_THRESHOLD": ("wake_word", "threshold"),
+        "WAKE_WORD_CONFIRMATION_SOUND": ("wake_word", "confirmation_sound"),
+        "WAKE_WORD_ANTENNA_RESPONSE": ("wake_word", "antenna_response"),
     }
     
     for env_var, path in env_overrides.items():
@@ -123,6 +152,27 @@ def clawdbot_url() -> str:
 
 def clawdbot_token() -> str:
     return get_config()['clawdbot']['token']
+
+def stt_provider() -> str:
+    return get_config()['stt']['provider']
+
+def stt_model() -> str:
+    return get_config()['stt']['model']
+
+def tts_provider() -> str:
+    return get_config()['tts']['provider']
+
+def tts_cache_enabled() -> bool:
+    return get_config()['tts']['cache_enabled']
+
+def wake_word_enabled() -> bool:
+    return get_config()['wake_word']['enabled']
+
+def wake_word_bot_name() -> str:
+    return get_config()['wake_word']['bot_name']
+
+def wake_word_threshold() -> float:
+    return float(get_config()['wake_word']['threshold'])
 
 
 if __name__ == "__main__":
