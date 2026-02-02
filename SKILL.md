@@ -5,7 +5,7 @@ description: Control Reachy Mini robot via REST API. Use when moving the robot's
 
 # Reachy Mini Control
 
-Control Reachy Mini robot at `http://192.168.1.171:8042`.
+Control Reachy Mini robot at `http://192.168.1.171:8000`.
 
 ## "Listen" Command (Voice Interaction)
 
@@ -13,12 +13,12 @@ When user says **"listen"**, run this flow:
 
 ```bash
 # 1. Antennas pop up (alert!)
-curl -s -X POST http://192.168.1.171:8042/api/move_antennas -H "Content-Type: application/json" -d '{"left": 60, "right": 60, "duration": 0.3}'
+curl -s -X POST http://192.168.1.171:8000/api/move_antennas -H "Content-Type: application/json" -d '{"left": 60, "right": 60, "duration": 0.3}'
 
 # 2. Record from mic (5 seconds)
-curl -s -X POST http://192.168.1.171:8042/api/audio/start_recording
+curl -s -X POST http://192.168.1.171:8000/api/audio/start_recording
 sleep 5
-curl -s -X POST http://192.168.1.171:8042/api/audio/stop_recording
+curl -s -X POST http://192.168.1.171:8000/api/audio/stop_recording
 
 # 3. Download recording, transcribe with Whisper, respond
 
@@ -26,35 +26,35 @@ curl -s -X POST http://192.168.1.171:8042/api/audio/stop_recording
 
 # 5. Upload audio and play on Reachy
 sshpass -p "root" scp -o StrictHostKeyChecking=no audio.wav pollen@192.168.1.171:/tmp/reachy_mini_testbench/recordings/
-curl -s -X POST http://192.168.1.171:8042/api/audio/play/audio.wav
+curl -s -X POST http://192.168.1.171:8000/api/audio/play/audio.wav
 
 # 6. Return antennas to neutral
-curl -s -X POST http://192.168.1.171:8042/api/move_antennas -H "Content-Type: application/json" -d '{"left": 0, "right": 0, "duration": 0.3}'
+curl -s -X POST http://192.168.1.171:8000/api/move_antennas -H "Content-Type: application/json" -d '{"left": 0, "right": 0, "duration": 0.3}'
 ```
 
 ## Quick Animations
 
 ```bash
 # Antennas pop up (attention!)
-curl -s -X POST http://192.168.1.171:8042/api/move_antennas -H "Content-Type: application/json" -d '{"left": 60, "right": 60, "duration": 0.3}'
+curl -s -X POST http://192.168.1.171:8000/api/move_antennas -H "Content-Type: application/json" -d '{"left": 60, "right": 60, "duration": 0.3}'
 
 # Antennas wiggle (happy)
-curl -s -X POST http://192.168.1.171:8042/api/move_antennas -H "Content-Type: application/json" -d '{"left": 40, "right": -40, "duration": 0.2}'
+curl -s -X POST http://192.168.1.171:8000/api/move_antennas -H "Content-Type: application/json" -d '{"left": 40, "right": -40, "duration": 0.2}'
 sleep 0.25
-curl -s -X POST http://192.168.1.171:8042/api/move_antennas -H "Content-Type: application/json" -d '{"left": -40, "right": 40, "duration": 0.2}'
+curl -s -X POST http://192.168.1.171:8000/api/move_antennas -H "Content-Type: application/json" -d '{"left": -40, "right": 40, "duration": 0.2}'
 
 # Head nod (yes)
-curl -s -X POST http://192.168.1.171:8042/api/move_head -H "Content-Type: application/json" -d '{"pitch": 15, "duration": 0.3}'
+curl -s -X POST http://192.168.1.171:8000/api/move_head -H "Content-Type: application/json" -d '{"pitch": 15, "duration": 0.3}'
 sleep 0.35
-curl -s -X POST http://192.168.1.171:8042/api/move_head -H "Content-Type: application/json" -d '{"pitch": -10, "duration": 0.3}'
+curl -s -X POST http://192.168.1.171:8000/api/move_head -H "Content-Type: application/json" -d '{"pitch": -10, "duration": 0.3}'
 
 # Head shake (no)
-curl -s -X POST http://192.168.1.171:8042/api/move_head -H "Content-Type: application/json" -d '{"yaw": 25, "duration": 0.25}'
+curl -s -X POST http://192.168.1.171:8000/api/move_head -H "Content-Type: application/json" -d '{"yaw": 25, "duration": 0.25}'
 sleep 0.3
-curl -s -X POST http://192.168.1.171:8042/api/move_head -H "Content-Type: application/json" -d '{"yaw": -25, "duration": 0.25}'
+curl -s -X POST http://192.168.1.171:8000/api/move_head -H "Content-Type: application/json" -d '{"yaw": -25, "duration": 0.25}'
 
 # Return to neutral
-curl -s -X POST http://192.168.1.171:8042/api/go_to_zero
+curl -s -X POST http://192.168.1.171:8000/api/go_to_zero
 ```
 
 ## SSH Access
@@ -91,7 +91,7 @@ result = client.predict(
 
 ## API Endpoints Reference
 
-Base: `http://192.168.1.171:8042`
+Base: `http://192.168.1.171:8000`
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
