@@ -13,13 +13,13 @@ Give your [Reachy Mini](https://www.pollen-robotics.com/reachy-mini/) robot a br
 ## Quick Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/your-repo/reachy-brain/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/kayacancode/reachy-brain/main/install.sh | bash
 ```
 
 Or manually:
 
 ```bash
-git clone https://github.com/your-repo/reachy-brain
+git clone https://github.com/kayacancode/reachy-brain
 cd reachy-brain
 ./install.sh
 ```
@@ -191,7 +191,7 @@ Config lives at `~/.config/reachy-brain/config.json`:
 {
   "reachy": {
     "ip": "192.168.1.171",
-    "port": 8042,
+    "port": 8000,
     "ssh_user": "pollen",
     "ssh_pass": "your-password"
   },
@@ -225,50 +225,57 @@ Config lives at `~/.config/reachy-brain/config.json`:
 
 | Component | Provider | Notes |
 |-----------|----------|-------|
-| STT | Whisper | Local, free, runs on your machine |
-| TTS | Chatterbox | Via HuggingFace Space (free) |
+| STT | faster-whisper / Whisper | Local, free, runs on your machine |
+| TTS | Piper / Chatterbox / macOS | Piper recommended (fast & local) |
 | Memory | Honcho | Cloud API, free tier available |
-| Brain | Clawdbot | Your existing agent |
-| Robot | Reachy Mini | REST API at port 8042 |
+| Brain | OpenClaw | Your existing agent |
+| Robot | Reachy Mini | REST API at port 8000 |
 
 ## API Reference
 
 ### Reachy Endpoints
 
 ```bash
-# Status
-curl http://REACHY_IP:8042/api/status
+# Daemon Status
+curl http://REACHY_IP:8000/api/daemon/status
 
 # Wake/Sleep
-curl -X POST http://REACHY_IP:8042/api/wake_up
-curl -X POST http://REACHY_IP:8042/api/go_to_sleep
+curl -X POST "http://REACHY_IP:8000/api/daemon/start?wake_up=true"
+curl -X POST http://REACHY_IP:8000/api/move/play/goto_sleep
 
-# Move head
-curl -X POST http://REACHY_IP:8042/api/move_head \
+# Move head (smooth interpolation)
+curl -X POST http://REACHY_IP:8000/api/move/goto \
   -H "Content-Type: application/json" \
-  -d '{"pitch": 10, "yaw": 20, "roll": 0, "duration": 0.5}'
+  -d '{"head_pose": {"pitch": 10, "yaw": 20, "roll": 0}, "duration": 0.5}'
 
 # Antennas
-curl -X POST http://REACHY_IP:8042/api/move_antennas \
+curl -X POST http://REACHY_IP:8000/api/move/goto \
   -H "Content-Type: application/json" \
-  -d '{"left": 45, "right": 45, "duration": 0.3}'
+  -d '{"antennas": [45, 45], "duration": 0.3}'
 
-# Record audio
-curl -X POST http://REACHY_IP:8042/api/audio/start_recording
-sleep 5
-curl -X POST http://REACHY_IP:8042/api/audio/stop_recording
+# Combined movement (head + antennas + body)
+curl -X POST http://REACHY_IP:8000/api/move/goto \
+  -H "Content-Type: application/json" \
+  -d '{"head_pose": {"pitch": 10, "yaw": 15}, "antennas": [30, 30], "duration": 1.0, "interpolation": "minjerk"}'
 
-# Play audio (file must be in recordings dir)
-curl -X POST http://REACHY_IP:8042/api/audio/play/filename.wav
+# Play emotion
+curl -X POST http://REACHY_IP:8000/api/move/play/recorded-move-dataset/pollen-robotics/reachy-mini-emotions-library/cheerful1
+
+# Play dance
+curl -X POST http://REACHY_IP:8000/api/move/play/recorded-move-dataset/pollen-robotics/reachy-mini-dances-library/jackson_square
+
+# Volume control
+curl http://REACHY_IP:8000/api/volume/current
+curl -X POST http://REACHY_IP:8000/api/volume/set \
+  -H "Content-Type: application/json" -d '{"volume": 75}'
 ```
+
+> **Note:** Audio recording uses the Reachy Mini Python SDK (`reachy_mini.media`) via SSH, not the REST API.
 
 ### SSH Access
 
 ```bash
 ssh pollen@REACHY_IP  # password from config
-
-# Audio files location
-/tmp/reachy_mini_testbench/recordings/
 ```
 
 ## Troubleshooting
