@@ -1,0 +1,29 @@
+{
+  "reachy": {
+    "ip": "192.168.1.171",
+    "port": 8042,
+    "ssh_user": "pollen",
+    "ssh_pass": "YOUR_SSH_PASSWORD"
+  },
+  "honcho": {
+    "api_key": "hch-v2-YOUR_HONCHO_API_KEY",
+    "workspace": "reachy-brain"
+  },
+  "agent": {
+    "name": "ReachyBot",
+    "personality": "A friendly robot assistant that loves to help"
+  },
+  "tts": {
+    "provider": "chatterbox",
+    "huggingface_space": "ResembleAI/chatterbox-turbo-demo"
+  },
+  "stt": {
+    "provider": "whisper",
+    "model": "base"
+  },
+  "clawdbot": {
+    "host": "localhost",
+    "port": 18789,
+    "token": "YOUR_CLAWDBOT_TOKEN"
+  }
+}
