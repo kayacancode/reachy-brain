@@ -10,9 +10,11 @@ Usage:
 
 import argparse
 import base64
+import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -39,6 +41,16 @@ MACOS_VOICE = os.environ.get("MACOS_VOICE", "Samantha")  # Try: Samantha, Alex, 
 # Chatterbox via HuggingFace
 CHATTERBOX_SPACE = "ResembleAI/chatterbox-turbo-demo"
 USE_CHATTERBOX = True  # Set to False to use macOS say
+
+# TTS Cache
+TTS_CACHE_DIR = Path.home() / ".cache" / "reachy-tts"
+COMMON_PHRASES = [
+    "I'm listening",
+    "I'm thinking",
+    "I didn't catch that",
+    "Sorry, I couldn't process that",
+    "I'm not sure how to respond to that"
+]
 
 
 def reachy_api(method: str, path: str, data: dict = None) -> dict:
@@ -184,8 +196,8 @@ def trim_silence(audio_path: str, aggressiveness: int = 2) -> str:
         return audio_path
 
 
-def transcribe_whisper(audio_path: str) -> str:
-    """Transcribe audio with Whisper."""
+def transcribe_whisper_original(audio_path: str) -> str:
+    """Transcribe audio with original OpenAI Whisper CLI."""
     try:
         result = subprocess.run([
             "whisper", audio_path,
@@ -194,7 +206,7 @@ def transcribe_whisper(audio_path: str) -> str:
             "--output_dir", "/tmp",
             "--language", "en"
         ], capture_output=True, text=True, timeout=60)
-        
+
         # Read the output txt file
         txt_path = Path("/tmp") / (Path(audio_path).stem + ".txt")
         if txt_path.exists():
@@ -204,6 +216,44 @@ def transcribe_whisper(audio_path: str) -> str:
     except Exception as e:
         print(f"   Whisper error: {e}")
     return ""
+
+
+def transcribe_faster_whisper(audio_path: str) -> str:
+    """Transcribe audio with faster-whisper (2-4x faster than openai-whisper)."""
+    try:
+        from faster_whisper import WhisperModel
+
+        # Get configuration
+        model_size = os.environ.get("WHISPER_MODEL", "base")
+        device = os.environ.get("WHISPER_DEVICE", "cpu")
+        compute_type = os.environ.get("WHISPER_COMPUTE_TYPE", "int8")
+
+        # Load model (cached after first load)
+        model = WhisperModel(model_size, device=device, compute_type=compute_type)
+
+        # Transcribe
+        segments, info = model.transcribe(audio_path, language="en")
+
+        # Collect all segment texts
+        text = " ".join([segment.text for segment in segments])
+
+        return text.strip()
+    except ImportError:
+        print("   faster-whisper not installed, falling back to original whisper")
+        return transcribe_whisper_original(audio_path)
+    except Exception as e:
+        print(f"   faster-whisper error: {e}, falling back to original whisper")
+        return transcribe_whisper_original(audio_path)
+
+
+def transcribe_whisper(audio_path: str) -> str:
+    """Transcribe audio with configured STT provider."""
+    provider = os.environ.get("STT_PROVIDER", "faster-whisper")
+
+    if provider == "faster-whisper":
+        return transcribe_faster_whisper(audio_path)
+    else:
+        return transcribe_whisper_original(audio_path)
 
 
 def get_honcho_context(message: str) -> str:
@@ -292,15 +342,72 @@ def clean_for_speech(text: str) -> str:
     text = re.sub(r'`(.+?)`', r'\1', text)        # code
     text = re.sub(r'#{1,6}\s*', '', text)         # headers
     text = re.sub(r'\[(.+?)\]\(.+?\)', r'\1', text)  # links
-    
+
     # Remove common emojis (keep text readable)
     text = re.sub(r'[🫧🤖✨🔥👋💡🎯📝🎤🧠🗣️☀️]', '', text)
-    
+
     # Clean up whitespace
     text = re.sub(r'\n+', '. ', text)
     text = re.sub(r'\s+', ' ', text)
-    
+
     return text.strip()[:500]  # Limit length for TTS
+
+
+def init_tts_cache():
+    """Initialize TTS cache directory."""
+    TTS_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def get_cache_key(text: str) -> str:
+    """Generate cache key from text."""
+    return hashlib.md5(text.encode()).hexdigest()
+
+
+def get_cached_tts(text: str) -> str:
+    """Check if TTS for this text is cached."""
+    if not os.environ.get("TTS_CACHE_ENABLED", "true").lower() == "true":
+        return None
+
+    cache_key = get_cache_key(text)
+    cache_path = TTS_CACHE_DIR / f"{cache_key}.wav"
+
+    if cache_path.exists():
+        print("   [Using cached TTS]")
+        return str(cache_path)
+    return None
+
+
+def cache_tts(text: str, audio_path: str):
+    """Cache TTS audio file."""
+    if not os.environ.get("TTS_CACHE_ENABLED", "true").lower() == "true":
+        return
+
+    try:
+        cache_key = get_cache_key(text)
+        cache_path = TTS_CACHE_DIR / f"{cache_key}.wav"
+        shutil.copy(audio_path, cache_path)
+    except Exception as e:
+        print(f"   Cache error: {e}")
+
+
+def precache_common_phrases():
+    """Pre-generate TTS for common phrases on startup."""
+    init_tts_cache()
+    provider = os.environ.get("TTS_PROVIDER", "piper")
+
+    if provider != "piper":
+        return  # Only pre-cache for fast providers
+
+    print("Pre-caching common phrases...")
+    for phrase in COMMON_PHRASES:
+        if not get_cached_tts(phrase):
+            try:
+                audio = speak_piper(phrase)
+                if audio and os.path.exists(audio):
+                    cache_tts(phrase, audio)
+                    os.unlink(audio)  # Remove temp file
+            except Exception as e:
+                print(f"   Pre-cache error for '{phrase}': {e}")
 
 
 def speak_macos(text: str, output_path: str = None) -> str:
@@ -342,7 +449,6 @@ def speak_chatterbox(text: str, output_path: str = None) -> str:
         )
         
         # Copy to our output path
-        import shutil
         shutil.copy(result, output_path)
         return output_path
     except Exception as e:
@@ -351,12 +457,67 @@ def speak_chatterbox(text: str, output_path: str = None) -> str:
         return speak_macos(text, output_path.replace('.wav', '.aiff'))
 
 
+def speak_piper(text: str, output_path: str = None) -> str:
+    """Generate speech with Piper TTS (200-500ms, local)."""
+    if output_path is None:
+        output_path = tempfile.mktemp(suffix=".wav")
+
+    try:
+        # Import here to avoid startup delay
+        from piper import PiperVoice
+
+        # Get voice model configuration
+        voice_model = os.environ.get("PIPER_VOICE", "en_US-lessac-medium")
+
+        # Load voice (cached after first load)
+        voice = PiperVoice.load(voice_model)
+
+        # Generate audio
+        with open(output_path, 'wb') as f:
+            voice.synthesize(text, f)
+
+        return output_path
+    except ImportError:
+        print("   Piper not installed, falling back to macOS voice...")
+        return speak_macos(text, output_path.replace('.wav', '.aiff'))
+    except Exception as e:
+        print(f"   Piper error: {e}")
+        print("   Falling back to macOS voice...")
+        return speak_macos(text, output_path.replace('.wav', '.aiff'))
+
+
 def speak(text: str, output_path: str = None) -> str:
-    """Generate speech with configured TTS."""
-    if USE_CHATTERBOX:
-        return speak_chatterbox(text, output_path)
+    """Generate speech with caching and configured TTS provider."""
+    # Check cache first
+    cached = get_cached_tts(text)
+    if cached:
+        # Copy cached file to output path if specified
+        if output_path:
+            shutil.copy(cached, output_path)
+            return output_path
+        return cached
+
+    # Generate with configured provider
+    provider = os.environ.get("TTS_PROVIDER", "piper")
+
+    if provider == "piper":
+        audio_path = speak_piper(text, output_path)
+    elif provider == "chatterbox":
+        audio_path = speak_chatterbox(text, output_path)
+    elif provider == "macos":
+        audio_path = speak_macos(text, output_path)
     else:
-        return speak_macos(text, output_path)
+        # Default: check USE_CHATTERBOX for backward compatibility
+        if USE_CHATTERBOX:
+            audio_path = speak_chatterbox(text, output_path)
+        else:
+            audio_path = speak_macos(text, output_path)
+
+    # Cache result if it exists
+    if audio_path and os.path.exists(audio_path):
+        cache_tts(text, audio_path)
+
+    return audio_path
 
 
 def play_audio_local(audio_path: str):
@@ -413,6 +574,147 @@ def move_reachy(emotion: str = "neutral"):
     }
     move = movements.get(emotion, movements["neutral"])
     reachy_api("POST", "/api/move_head", {**move, "duration": 0.3})
+
+
+def on_wake_word_detected(wake_word: str, score: float):
+    """Callback when wake word is detected."""
+    print(f"🎤 Wake word detected! ({wake_word}, score: {score:.2f})")
+
+    # Visual feedback: move antennas
+    if os.environ.get("WAKE_WORD_ANTENNA_RESPONSE", "true").lower() == "true":
+        move_reachy("listening")
+
+    # Audio feedback: play confirmation sound
+    if os.environ.get("WAKE_WORD_CONFIRMATION_SOUND", "true").lower() == "true":
+        try:
+            subprocess.run(
+                ["afplay", "/System/Library/Sounds/Glass.aiff"],
+                check=False,
+                capture_output=True,
+                timeout=2
+            )
+        except Exception:
+            pass  # Ignore if sound playback fails
+
+
+def wake_word_loop(use_local_mic: bool = False, use_local_speaker: bool = False,
+                   listen_duration: float = 15.0):
+    """Voice interaction loop with wake word detection."""
+    print("\n🤖 Reachy + KayaCan Voice Loop (Wake Word Mode)")
+    print("=" * 50)
+
+    bot_name = os.environ.get("WAKE_WORD_BOT_NAME", "OpenClaw")
+    threshold = float(os.environ.get("WAKE_WORD_THRESHOLD", "0.5"))
+
+    print(f"  Bot name: {bot_name}")
+    print(f"  Wake word: 'Hey {bot_name}'")
+    print(f"  Threshold: {threshold}")
+    print(f"  Reachy: {REACHY_BASE}")
+    print(f"  Mic: {'local' if use_local_mic else 'reachy'}")
+    print(f"  Speaker: {'local' if use_local_speaker else 'reachy'}")
+    print("=" * 50)
+    print("\nListening for wake word... (Press Ctrl+C to stop)\n")
+
+    # Initialize TTS cache
+    init_tts_cache()
+
+    # Pre-cache common phrases for faster response
+    # precache_common_phrases()  # Uncomment to enable pre-caching
+
+    # Import and initialize wake word detector
+    try:
+        from wake_word import WakeWordDetector
+    except ImportError:
+        print("✗ Error: wake_word module not found")
+        print("  Make sure wake_word.py is in the scripts directory")
+        return
+
+    try:
+        detector = WakeWordDetector(threshold=threshold)
+    except Exception as e:
+        print(f"✗ Error initializing wake word detector: {e}")
+        return
+
+    try:
+        while True:
+            # Wait for wake word
+            detected, wake_word, score = detector.wait_for_wake_word(
+                callback=on_wake_word_detected,
+                timeout=None  # Wait indefinitely
+            )
+
+            if not detected:
+                continue
+
+            # Once detected, proceed with normal voice interaction
+            # 1. Record audio
+            if use_local_mic:
+                audio_path = record_audio_local(listen_duration)
+            else:
+                audio_path = record_audio_reachy(listen_duration)
+
+            if not audio_path:
+                print("   ❌ Recording failed\n")
+                print("Listening for wake word...\n")
+                continue
+
+            # 2. Transcribe
+            print("📝 Transcribing...")
+            text = transcribe_whisper(audio_path)
+
+            # Cleanup recording
+            if os.path.exists(audio_path):
+                os.unlink(audio_path)
+
+            if not text or len(text.strip()) < 2:
+                print("   (silence or unclear)\n")
+                print("Listening for wake word...\n")
+                continue
+
+            print(f"👤 You: {text}")
+
+            # 3. Send to KayaCan
+            print("🧠 Thinking...")
+            move_reachy("thinking")
+            response = send_to_clawdbot(text)
+            print(f"🤖 KayaCan: {response}")
+
+            # 4. Generate TTS
+            provider = os.environ.get("TTS_PROVIDER", "piper")
+            print(f"🗣️ Speaking... ({provider})")
+            move_reachy("speaking")
+            tts_path = speak(response)
+
+            if tts_path:
+                # 5. Play response
+                if use_local_speaker:
+                    play_audio_local(tts_path)
+                else:
+                    play_audio_reachy(tts_path)
+
+                # Cleanup
+                if os.path.exists(tts_path) and not tts_path.startswith(str(TTS_CACHE_DIR)):
+                    # Don't delete cached files
+                    os.unlink(tts_path)
+
+            # 6. Save to Honcho for memory
+            save_to_honcho(text, response)
+
+            move_reachy("neutral")
+            print("\nListening for wake word...\n")
+
+    except KeyboardInterrupt:
+        print("\n\n👋 Goodbye!")
+        move_reachy("neutral")
+    except Exception as e:
+        print(f"\n✗ Error in wake word loop: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        try:
+            detector.stop_listening()
+        except Exception:
+            pass
 
 
 def main_loop(use_local_mic: bool = False, use_local_speaker: bool = False,
@@ -503,21 +805,50 @@ def main_loop(use_local_mic: bool = False, use_local_speaker: bool = False,
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Reachy + KayaCan Voice Loop")
+    parser = argparse.ArgumentParser(
+        description="Reachy + KayaCan Voice Loop",
+        epilog="""
+Examples:
+  # Push-to-talk mode (press ENTER to speak)
+  python voice_loop.py --push-to-talk
+
+  # Wake word mode (voice-activated)
+  python voice_loop.py --wake-word
+
+  # Test locally with wake word
+  python voice_loop.py --wake-word --local-mic --local-speaker
+
+  # Continuous listening (no wake word, no push-to-talk)
+  python voice_loop.py
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--local-mic", action="store_true", help="Use local microphone")
     parser.add_argument("--local-speaker", action="store_true", help="Use local speaker")
     parser.add_argument("--duration", type=float, default=5.0, help="Listen duration (seconds)")
     parser.add_argument("--push-to-talk", action="store_true", help="Wait for ENTER before listening")
+    parser.add_argument("--wake-word", action="store_true", help="Enable wake word detection (voice-activated)")
     parser.add_argument("--voice", default="Samantha", help="macOS voice (Samantha, Alex, Ava)")
-    
+
     args = parser.parse_args()
-    
+
     if args.voice:
         MACOS_VOICE = args.voice
-    
-    main_loop(
-        use_local_mic=args.local_mic,
-        use_local_speaker=args.local_speaker,
-        listen_duration=args.duration,
-        push_to_talk=args.push_to_talk
-    )
+
+    # Initialize TTS cache for all modes
+    init_tts_cache()
+
+    # Dispatch to appropriate loop mode
+    if args.wake_word:
+        wake_word_loop(
+            use_local_mic=args.local_mic,
+            use_local_speaker=args.local_speaker,
+            listen_duration=args.duration
+        )
+    else:
+        main_loop(
+            use_local_mic=args.local_mic,
+            use_local_speaker=args.local_speaker,
+            listen_duration=args.duration,
+            push_to_talk=args.push_to_talk
+        )
