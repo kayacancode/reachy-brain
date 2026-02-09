@@ -62,7 +62,43 @@ reachy-mini/
 └── SKILL.md                      # MCP skill definition
 ```
 
-## Setup
+## Quick Setup (New Location)
+
+When you move to a new location with Reachy, run the setup script:
+
+```bash
+git clone https://github.com/kayacancode/reachy-mini
+cd reachy-mini
+./setup.sh
+```
+
+The script will:
+1. **Find your robot** - Auto-discovers on network or enter IP manually
+2. **Test connection** - Verifies daemon and SSH access
+3. **Configure API keys** - OpenAI, ElevenLabs, Honcho, OpenClaw
+4. **Deploy to robot** - Copies all files and .env to robot
+5. **Restart app** - Gets everything running
+
+### Quick Commands (After Setup)
+
+```bash
+./connect.sh           # Show status and Gradio URL
+./connect.sh deploy    # Deploy latest code to robot
+./connect.sh restart   # Restart the conversation app
+./connect.sh logs      # Stream robot logs
+./connect.sh ssh       # SSH into robot
+./connect.sh url       # Just print the Gradio URL
+```
+
+### Requirements
+
+- **sshpass** - Install with `brew install sshpass` (Mac) or `apt install sshpass` (Linux)
+- **curl** - Usually pre-installed
+- Robot and computer on same network
+
+---
+
+## Manual Setup
 
 ### Prerequisites
 
