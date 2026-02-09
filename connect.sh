@@ -1,18 +1,52 @@
 #!/bin/bash
 # Quick connect/deploy script - use after initial setup.sh
 # Usage: ./connect.sh [command]
-#   ./connect.sh         - Show status and Gradio URL
-#   ./connect.sh deploy  - Deploy latest code to robot
-#   ./connect.sh restart - Restart the conversation app
-#   ./connect.sh logs    - Stream robot logs
-#   ./connect.sh ssh     - SSH into robot
+#   ./connect.sh              - Show status and Gradio URL
+#   ./connect.sh use <name>   - Switch to known IP (e.g., 2389, home)
+#   ./connect.sh deploy       - Deploy latest code to robot
+#   ./connect.sh restart      - Restart the conversation app
+#   ./connect.sh logs         - Stream robot logs
+#   ./connect.sh ssh          - SSH into robot
 
 set -e
 
 CONFIG_FILE="$HOME/.kayacan/config.env"
+KNOWN_IPS_FILE="$HOME/.kayacan/known_ips.env"
+
+# Load known IPs
+[ -f "$KNOWN_IPS_FILE" ] && source "$KNOWN_IPS_FILE"
+
+# Handle 'use' command to switch IPs
+if [ "$1" = "use" ] && [ -n "$2" ]; then
+    VAR_NAME="REACHY_IP_${2^^}"  # Uppercase the name
+    NEW_IP="${!VAR_NAME}"
+    if [ -n "$NEW_IP" ]; then
+        mkdir -p "$HOME/.kayacan"
+        if [ -f "$CONFIG_FILE" ]; then
+            sed -i '' "s/ROBOT_IP=\"[^\"]*\"/ROBOT_IP=\"$NEW_IP\"/" "$CONFIG_FILE"
+        else
+            echo "ROBOT_IP=\"$NEW_IP\"" > "$CONFIG_FILE"
+            echo "SSH_PASS=\"root\"" >> "$CONFIG_FILE"
+        fi
+        echo "Switched to $2: $NEW_IP"
+        # Test connection
+        if curl -s --connect-timeout 2 "http://$NEW_IP:8000/api/daemon/status" &>/dev/null; then
+            echo "Connection OK!"
+        else
+            echo "Warning: Cannot reach robot at $NEW_IP"
+        fi
+        exit 0
+    else
+        echo "Unknown location: $2"
+        echo "Known locations:"
+        grep "^REACHY_IP_" "$KNOWN_IPS_FILE" 2>/dev/null | sed 's/REACHY_IP_//;s/=/ = /'
+        exit 1
+    fi
+fi
 
 if [ ! -f "$CONFIG_FILE" ]; then
-    echo "No config found. Run ./setup.sh first."
+    echo "No config found. Run ./setup.sh first or ./connect.sh use <location>"
+    [ -f "$KNOWN_IPS_FILE" ] && echo "" && echo "Known locations:" && grep "^REACHY_IP_" "$KNOWN_IPS_FILE" | sed 's/REACHY_IP_//;s/=/ = /'
     exit 1
 fi
 
@@ -107,15 +141,38 @@ EOF
         fi
         ;;
 
+    ips|list)
+        echo "Known Reachy locations:"
+        grep "^REACHY_IP_" "$KNOWN_IPS_FILE" 2>/dev/null | sed 's/REACHY_IP_//;s/=/ = /' || echo "No known IPs saved"
+        echo ""
+        echo "Current: $ROBOT_IP"
+        ;;
+
+    wake)
+        echo "Waking up Reachy at $ROBOT_IP..."
+        curl -s -X POST "http://$ROBOT_IP:8000/api/daemon/start?wake_up=true"
+        echo ""
+        ;;
+
+    sleep)
+        echo "Putting Reachy to sleep..."
+        curl -s -X POST "http://$ROBOT_IP:8000/api/move/play/goto_sleep"
+        echo ""
+        ;;
+
     *)
         echo "Usage: ./connect.sh [command]"
         echo ""
         echo "Commands:"
-        echo "  status   - Show status and Gradio URL (default)"
-        echo "  deploy   - Deploy latest code to robot"
-        echo "  restart  - Restart the conversation app"
-        echo "  logs     - Stream robot logs"
-        echo "  ssh      - SSH into robot"
-        echo "  url      - Just print the Gradio URL"
+        echo "  status      - Show status and Gradio URL (default)"
+        echo "  use <name>  - Switch to known IP (e.g., 2389, home)"
+        echo "  ips         - List known IPs"
+        echo "  deploy      - Deploy latest code to robot"
+        echo "  restart     - Restart the conversation app"
+        echo "  logs        - Stream robot logs"
+        echo "  ssh         - SSH into robot"
+        echo "  url         - Just print the Gradio URL"
+        echo "  wake        - Wake up Reachy"
+        echo "  sleep       - Put Reachy to sleep"
         ;;
 esac
