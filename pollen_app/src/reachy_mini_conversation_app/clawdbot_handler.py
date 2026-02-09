@@ -487,46 +487,81 @@ class ClawdbotHandler(AsyncStreamHandler):
             response.raise_for_status()
             mp3_bytes = response.content
 
-            # Convert MP3 to PCM for head wobbler
+            # Get audio duration for head animation timing
             audio_segment = AudioSegment.from_mp3(io.BytesIO(mp3_bytes))
-            # Resample to 24kHz mono for head wobbler
-            audio_segment = audio_segment.set_frame_rate(FASTRTC_SAMPLE_RATE).set_channels(1)
-            pcm_samples = np.array(audio_segment.get_array_of_samples(), dtype=np.int16)
+            duration_sec = len(audio_segment) / 1000.0
 
-            # Feed audio to head wobbler for animated head movement
-            head_wobbler = self.deps.head_wobbler
-            if head_wobbler:
-                # Reset wobbler state for new utterance
-                head_wobbler.reset()
-                # Feed in chunks (roughly 100ms each) for smooth animation
-                chunk_size = FASTRTC_SAMPLE_RATE // 10  # 2400 samples = 100ms
-                for i in range(0, len(pcm_samples), chunk_size):
-                    chunk = pcm_samples[i:i + chunk_size]
-                    # Convert to base64 for the wobbler API
-                    chunk_b64 = base64.b64encode(chunk.tobytes()).decode("utf-8")
-                    head_wobbler.feed(chunk_b64)
-                logger.info(f"Fed {len(pcm_samples)} samples to head wobbler")
-
-            # Save MP3 to temp file and play on robot speaker
+            # Save MP3 to temp file
             import tempfile
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
                 f.write(mp3_bytes)
                 temp_path = f.name
 
-            # Play on robot speaker (blocking call, run in executor)
+            # Start head animation concurrently with audio playback
             robot = self.deps.reachy_mini
             if robot and hasattr(robot, "media"):
-                logger.info(f"Playing TTS on robot speaker: {len(mp3_bytes)} bytes")
+                logger.info(f"Playing TTS on robot speaker: {len(mp3_bytes)} bytes, {duration_sec:.1f}s")
+
+                # Run head animation and audio playback concurrently
                 loop = asyncio.get_event_loop()
-                await loop.run_in_executor(None, robot.media.play_sound, temp_path)
+                await asyncio.gather(
+                    self._animate_head_while_speaking(duration_sec),
+                    loop.run_in_executor(None, robot.media.play_sound, temp_path),
+                )
+
                 # Clean up temp file
                 import os
                 os.unlink(temp_path)
             else:
                 logger.warning("Robot media not available, skipping audio playback")
 
+            # Reset head to neutral position after speaking
+            movement_manager = self.deps.movement_manager
+            if movement_manager:
+                movement_manager.set_speech_offsets((0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
+                logger.debug("Reset head to neutral position after TTS")
+
         except Exception as e:
             logger.error(f"TTS error: {e}")
+            # Also reset on error to avoid stuck position
+            if self.deps.movement_manager:
+                self.deps.movement_manager.set_speech_offsets((0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
+
+    async def _animate_head_while_speaking(self, duration_sec: float) -> None:
+        """Animate head with expressive movements while speaking."""
+        import math
+
+        movement_manager = self.deps.movement_manager
+        if not movement_manager:
+            return
+
+        start_time = asyncio.get_event_loop().time()
+        update_interval = 0.05  # Update every 50ms for smoother animation
+
+        while True:
+            elapsed = asyncio.get_event_loop().time() - start_time
+            if elapsed >= duration_sec:
+                break
+
+            # Generate expressive head movements - MORE PRONOUNCED
+            t = elapsed * 2.5  # Animation speed
+
+            # Pitch (nodding) - noticeable range ~5-8 degrees
+            pitch = 0.12 * math.sin(t * 1.8) + 0.05 * math.sin(t * 4.1)
+
+            # Yaw (turning side to side) - ~3-5 degrees
+            yaw = 0.08 * math.sin(t * 1.1) + 0.04 * math.sin(t * 2.7)
+
+            # Roll (tilting) - subtle ~2-3 degrees
+            roll = 0.05 * math.sin(t * 1.5) + 0.02 * math.sin(t * 3.3)
+
+            # Vertical movement (emphasis) - ~5mm
+            z = 0.005 * math.sin(t * 3.0)
+
+            # Apply speech offsets (x, y, z, roll, pitch, yaw) in radians/meters
+            movement_manager.set_speech_offsets((0.0, 0.0, z, roll, pitch, yaw))
+
+            await asyncio.sleep(update_interval)
 
     async def _save_to_memory(self, user_message: str, robot_message: str) -> None:
         """Save conversation turn to Honcho memory."""
