@@ -67,13 +67,22 @@ def run(
             "Remove --no-camera to enable head tracking."
         )
 
+    # Check if using Clawdbot mode (need to know early for SDK config)
+    use_clawdbot_env = os.getenv("USE_CLAWDBOT", "").lower() in ("1", "true", "yes")
+    use_clawdbot = args.clawdbot or use_clawdbot_env
+
     if robot is None:
         try:
             robot_kwargs = {}
             if args.robot_name is not None:
                 robot_kwargs["robot_name"] = args.robot_name
 
-            logger.info("Initializing ReachyMini (SDK will auto-detect appropriate backend)")
+            # For Clawdbot mode with Gradio, disable SDK media (Gradio handles browser audio)
+            if use_clawdbot and args.gradio:
+                robot_kwargs["media_backend"] = "no_media"
+                logger.info("Initializing ReachyMini with no_media backend (Gradio handles audio)")
+            else:
+                logger.info("Initializing ReachyMini (SDK will auto-detect appropriate backend)")
             robot = ReachyMini(**robot_kwargs)
 
         except TimeoutError as e:
@@ -109,6 +118,21 @@ def run(
 
     camera_worker, _, vision_manager = handle_vision_stuff(args, robot)
 
+    # Initialize face identity for user recognition (use_clawdbot defined above)
+    # Works with either SDK camera_worker or HTTP fallback
+    face_identity = None
+    if use_clawdbot:
+        try:
+            from reachy_mini_conversation_app.face_identity_manager import FaceIdentityManager
+            robot_ip = os.getenv("ROBOT_IP")
+            face_identity = FaceIdentityManager(
+                camera_worker=camera_worker,  # May be None if --no-camera
+                robot_ip=robot_ip,  # For HTTP fallback
+            )
+            logger.info("Face identity manager initialized")
+        except Exception as e:
+            logger.warning(f"Face identity disabled: {e}")
+
     movement_manager = MovementManager(
         current_robot=robot,
         camera_worker=camera_worker,
@@ -136,6 +160,7 @@ def run(
         vision_manager=vision_manager,
         head_wobbler=head_wobbler,
         memory=memory,
+        face_identity=face_identity,
     )
     current_file_path = os.path.dirname(os.path.abspath(__file__))
     logger.debug(f"Current file absolute path: {current_file_path}")
@@ -149,9 +174,7 @@ def run(
     )
     logger.debug(f"Chatbot avatar images: {chatbot.avatar_images}")
 
-    # Choose handler based on --clawdbot flag or USE_CLAWDBOT env var
-    use_clawdbot_env = os.getenv("USE_CLAWDBOT", "").lower() in ("1", "true", "yes")
-    use_clawdbot = args.clawdbot or use_clawdbot_env
+    # Choose handler based on --clawdbot flag or USE_CLAWDBOT env var (already computed above)
     print(f"[main.py] USE_CLAWDBOT env={use_clawdbot_env}, args.clawdbot={args.clawdbot}, use_clawdbot={use_clawdbot}")
     if use_clawdbot:
         from reachy_mini_conversation_app.clawdbot_handler import ClawdbotHandler, ClawdbotConfig
@@ -212,11 +235,15 @@ def run(
 
     # Each async service → its own thread/loop
     movement_manager.start()
-    head_wobbler.start()
+    # Only start HeadWobbler for OpenAI Realtime mode (Clawdbot has its own animation)
+    if not use_clawdbot:
+        head_wobbler.start()
     if camera_worker:
         camera_worker.start()
     if vision_manager:
         vision_manager.start()
+    if face_identity:
+        face_identity.start()
 
     def poll_stop_event() -> None:
         """Poll the stop event to allow graceful shutdown."""
@@ -248,6 +275,8 @@ def run(
             camera_worker.stop()
         if vision_manager:
             vision_manager.stop()
+        if face_identity:
+            face_identity.stop()
 
         # Ensure media is explicitly closed before disconnecting
         try:

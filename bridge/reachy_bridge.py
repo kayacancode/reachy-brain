@@ -50,6 +50,7 @@ import requests
 import numpy as np
 import argparse
 import socket
+import cv2
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # Add the Reachy SDK to path
@@ -391,6 +392,31 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 "noise_threshold": NOISE_THRESHOLD,
                 "chunk_duration": CHUNK_DURATION
             })
+
+        elif self.path == '/snapshot':
+            # Camera snapshot endpoint for remote face recognition
+            try:
+                if robot is None:
+                    self._respond(503, {"error": "Robot not connected"})
+                    return
+
+                frame = robot.media.get_frame()
+                if frame is None:
+                    self._respond(503, {"error": "No frame available"})
+                    return
+
+                # Encode as JPEG
+                _, encoded = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                jpeg_bytes = encoded.tobytes()
+
+                self.send_response(200)
+                self.send_header('Content-Type', 'image/jpeg')
+                self.send_header('Content-Length', str(len(jpeg_bytes)))
+                self.end_headers()
+                self.wfile.write(jpeg_bytes)
+
+            except Exception as e:
+                self._respond(500, {"error": str(e)})
 
         elif self.path.startswith('/listen'):
             # Legacy compatibility for manual recording

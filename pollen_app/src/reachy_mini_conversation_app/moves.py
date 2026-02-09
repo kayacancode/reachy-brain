@@ -86,11 +86,11 @@ class BreathingMove(Move):  # type: ignore
         self.neutral_head_pose = create_head_pose(0, 0, 0, 0, 0, 0, degrees=True)
         self.neutral_antennas = np.array([0.0, 0.0])
 
-        # Breathing parameters
-        self.breathing_z_amplitude = 0.005  # 5mm gentle breathing
-        self.breathing_frequency = 0.1  # Hz (6 breaths per minute)
-        self.antenna_sway_amplitude = np.deg2rad(15)  # 15 degrees
-        self.antenna_frequency = 0.5  # Hz (faster antenna sway)
+        # Breathing parameters - ALL DISABLED for Clawdbot mode
+        self.breathing_z_amplitude = 0.0  # DISABLED - no breathing
+        self.breathing_frequency = 0.0  # DISABLED
+        self.antenna_sway_amplitude = 0.0  # DISABLED - no antenna movement
+        self.antenna_frequency = 0.0  # DISABLED
 
     @property
     def duration(self) -> float:
@@ -263,7 +263,7 @@ class MovementManager:
         self.move_queue: deque[Move] = deque()
 
         # Configuration
-        self.idle_inactivity_delay = 0.3  # seconds
+        self.idle_inactivity_delay = 999999.0  # DISABLED - never start breathing
         self.target_frequency = CONTROL_LOOP_FREQUENCY_HZ
         self.target_period = 1.0 / self.target_frequency
 
@@ -632,8 +632,35 @@ class MovementManager:
 
         return antennas_cmd
 
+    def _pose_changed(self, head: NDArray[np.float32], antennas: Tuple[float, float], body_yaw: float) -> bool:
+        """Check if pose has changed significantly from last commanded pose."""
+        with self._status_lock:
+            last_head, last_antennas, last_body_yaw = self._last_commanded_pose
+
+        # Check head pose difference (use Frobenius norm)
+        head_diff = np.linalg.norm(head - last_head)
+        if head_diff > 1e-6:
+            return True
+
+        # Check antenna difference
+        if abs(antennas[0] - last_antennas[0]) > 1e-6 or abs(antennas[1] - last_antennas[1]) > 1e-6:
+            return True
+
+        # Check body yaw difference
+        if abs(body_yaw - last_body_yaw) > 1e-6:
+            return True
+
+        return False
+
     def _issue_control_command(self, head: NDArray[np.float32], antennas: Tuple[float, float], body_yaw: float) -> None:
-        """Send the fused pose to the robot with throttled error logging."""
+        """Send the fused pose to the robot with throttled error logging.
+
+        Only sends command if pose has actually changed to avoid servo jitter.
+        """
+        # Skip if pose hasn't changed (prevents servo jitter from constant commands)
+        if not self._pose_changed(head, antennas, body_yaw):
+            return
+
         try:
             self.current_robot.set_target(head=head, antennas=antennas, body_yaw=body_yaw)
         except Exception as e:

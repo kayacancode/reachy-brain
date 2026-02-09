@@ -45,21 +45,21 @@ Give your [Reachy Mini](https://www.pollen-robotics.com/reachy-mini/) robot a br
 
 ```
 reachy-mini/
-├── pollen_app/                    # Pollen's conversation app (modified)
+├── pollen_app/                    # Main code - Pollen's conversation app (modified)
 │   └── src/reachy_mini_conversation_app/
-│       ├── main.py                # Entry point, --clawdbot flag
+│       ├── main.py                # Entry point (--clawdbot flag)
 │       ├── clawdbot_handler.py    # Our handler (Whisper→Claude→ElevenLabs)
+│       ├── moves.py               # Head/antenna movements
 │       ├── tools/
 │       │   ├── core_tools.py      # Tool registry
 │       │   ├── honcho_recall.py   # Memory recall tool
 │       │   └── honcho_remember.py # Memory save tool
 │       └── .env                   # API keys (on robot)
-├── reachy_agent/                  # Standalone agent modules
-│   ├── clawdbot.py               # OpenClaw HTTP client
-│   ├── memory.py                 # Honcho memory wrapper
-│   ├── stt.py                    # Whisper transcription
-│   └── tts.py                    # ElevenLabs synthesis
-└── SKILL.md                      # MCP skill definition
+├── bridge/                        # HTTP bridge (runs on robot)
+│   └── reachy_bridge.py          # Audio/camera HTTP endpoints
+├── setup.sh                       # First-time setup wizard
+├── connect.sh                     # Quick commands (deploy, restart, logs)
+└── SKILL.md                       # MCP skill definition
 ```
 
 ## Quick Setup (New Location)
