@@ -75,7 +75,7 @@ ELEVENLABS_VOICE_ID=IKne3meq5aSn9XLyUdCD
 
 # Honcho memory
 HONCHO_API_KEY=hch-v3-mwm11w7o0rr9snmo7y3p5ox81jxza3656mlqcxuacb3gr282ovzuu6c9vyfk6fml
-HONCHO_WORKSPACE_ID=reachy-mini
+HONCHO_WORKSPACE_ID=openclaw
 
 # Profile
 REACHY_MINI_CUSTOM_PROFILE=kayacan
