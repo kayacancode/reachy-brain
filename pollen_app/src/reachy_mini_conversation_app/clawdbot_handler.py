@@ -463,7 +463,7 @@ class ClawdbotHandler(AsyncStreamHandler):
             return "Something went wrong. Let me try again.", []
 
     async def _speak(self, text: str) -> None:
-        """Convert text to speech and queue audio."""
+        """Convert text to speech, animate head, and play on robot speaker."""
         if not text or not text.strip():
             return
 
@@ -487,30 +487,43 @@ class ClawdbotHandler(AsyncStreamHandler):
             response.raise_for_status()
             mp3_bytes = response.content
 
-            # Convert MP3 to PCM
-            audio = AudioSegment.from_mp3(io.BytesIO(mp3_bytes))
-            audio = audio.set_frame_rate(FASTRTC_SAMPLE_RATE).set_channels(1)
-            pcm_bytes = audio.raw_data
+            # Convert MP3 to PCM for head wobbler
+            audio_segment = AudioSegment.from_mp3(io.BytesIO(mp3_bytes))
+            # Resample to 24kHz mono for head wobbler
+            audio_segment = audio_segment.set_frame_rate(FASTRTC_SAMPLE_RATE).set_channels(1)
+            pcm_samples = np.array(audio_segment.get_array_of_samples(), dtype=np.int16)
 
-            # Convert to numpy array
-            audio_array = np.frombuffer(pcm_bytes, dtype=np.int16)
+            # Feed audio to head wobbler for animated head movement
+            head_wobbler = self.deps.head_wobbler
+            if head_wobbler:
+                # Reset wobbler state for new utterance
+                head_wobbler.reset()
+                # Feed in chunks (roughly 100ms each) for smooth animation
+                chunk_size = FASTRTC_SAMPLE_RATE // 10  # 2400 samples = 100ms
+                for i in range(0, len(pcm_samples), chunk_size):
+                    chunk = pcm_samples[i:i + chunk_size]
+                    # Convert to base64 for the wobbler API
+                    chunk_b64 = base64.b64encode(chunk.tobytes()).decode("utf-8")
+                    head_wobbler.feed(chunk_b64)
+                logger.info(f"Fed {len(pcm_samples)} samples to head wobbler")
 
-            # Feed to head wobbler for speech-reactive motion
-            if self.deps.head_wobbler is not None:
-                # ElevenLabs returns full audio, convert to base64 chunks for wobbler
-                chunk_size = 4096
-                for i in range(0, len(pcm_bytes), chunk_size):
-                    chunk = pcm_bytes[i : i + chunk_size]
-                    self.deps.head_wobbler.feed(base64.b64encode(chunk).decode())
+            # Save MP3 to temp file and play on robot speaker
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+                f.write(mp3_bytes)
+                temp_path = f.name
 
-            # Queue audio in chunks matching fastrtc expectations
-            chunk_samples = FASTRTC_SAMPLE_RATE // 10  # 100ms chunks
-            for i in range(0, len(audio_array), chunk_samples):
-                chunk = audio_array[i : i + chunk_samples]
-                if len(chunk) > 0:
-                    await self.output_queue.put(
-                        (FASTRTC_SAMPLE_RATE, chunk.reshape(1, -1))
-                    )
+            # Play on robot speaker (blocking call, run in executor)
+            robot = self.deps.reachy_mini
+            if robot and hasattr(robot, "media"):
+                logger.info(f"Playing TTS on robot speaker: {len(mp3_bytes)} bytes")
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(None, robot.media.play_sound, temp_path)
+                # Clean up temp file
+                import os
+                os.unlink(temp_path)
+            else:
+                logger.warning("Robot media not available, skipping audio playback")
 
         except Exception as e:
             logger.error(f"TTS error: {e}")
