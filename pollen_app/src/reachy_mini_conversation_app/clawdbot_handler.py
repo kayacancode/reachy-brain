@@ -16,6 +16,7 @@ import logging
 from typing import Any, Final, Tuple, Literal
 from dataclasses import dataclass
 
+import httpx
 import numpy as np
 from numpy.typing import NDArray
 from pydub import AudioSegment
@@ -498,22 +499,34 @@ class ClawdbotHandler(AsyncStreamHandler):
                 temp_path = f.name
 
             # Start head animation concurrently with audio playback
-            robot = self.deps.reachy_mini
-            if robot and hasattr(robot, "media"):
-                logger.info(f"Playing TTS on robot speaker: {len(mp3_bytes)} bytes, {duration_sec:.1f}s")
+            # Use bridge HTTP endpoint instead of SDK media (works with no_media backend)
+            robot_ip = os.getenv("ROBOT_IP", "192.168.23.66")
+            bridge_url = f"http://{robot_ip}:9000/play"
 
-                # Run head animation and audio playback concurrently
-                loop = asyncio.get_event_loop()
-                await asyncio.gather(
-                    self._animate_head_while_speaking(duration_sec),
-                    loop.run_in_executor(None, robot.media.play_sound, temp_path),
-                )
+            # Convert MP3 to WAV at 16kHz mono for bridge playback
+            audio_16k = audio_segment.set_frame_rate(16000).set_channels(1)
+            wav_buffer = io.BytesIO()
+            audio_16k.export(wav_buffer, format="wav")
+            wav_bytes = wav_buffer.getvalue()
 
-                # Clean up temp file
-                import os
-                os.unlink(temp_path)
-            else:
-                logger.warning("Robot media not available, skipping audio playback")
+            logger.info(f"Playing TTS via bridge: {len(wav_bytes)} bytes, {duration_sec:.1f}s")
+
+            async def play_on_bridge():
+                try:
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.post(bridge_url, content=wav_bytes, headers={"Content-Type": "audio/wav"}, timeout=30.0)
+                        logger.info(f"Bridge response: {resp.status_code} - {resp.text[:100]}")
+                except Exception as e:
+                    logger.error(f"Bridge playback error: {e}")
+
+            # Run head animation and audio playback concurrently
+            await asyncio.gather(
+                self._animate_head_while_speaking(duration_sec),
+                play_on_bridge(),
+            )
+
+            # Clean up temp file
+            os.unlink(temp_path)
 
             # Reset head to neutral position after speaking
             movement_manager = self.deps.movement_manager

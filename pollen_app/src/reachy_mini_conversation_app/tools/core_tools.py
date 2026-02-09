@@ -57,6 +57,8 @@ class ToolDependencies:
     motion_duration_s: float = 1.0
     # Honcho memory (for recall/remember tools)
     memory: Any | None = None  # ConversationMemory instance
+    # Face identity (for knowing who we're talking to)
+    face_identity: Any | None = None  # VisionSystem + FaceRegistry
 
 
 # Tool base class
