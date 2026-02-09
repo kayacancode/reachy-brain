@@ -18,8 +18,9 @@ KNOWN_IPS_FILE="$HOME/.kayacan/known_ips.env"
 
 # Handle 'use' command to switch IPs
 if [ "$1" = "use" ] && [ -n "$2" ]; then
-    VAR_NAME="REACHY_IP_${2^^}"  # Uppercase the name
-    NEW_IP="${!VAR_NAME}"
+    LOCATION_UPPER=$(echo "$2" | tr '[:lower:]' '[:upper:]')
+    VAR_NAME="REACHY_IP_${LOCATION_UPPER}"
+    eval "NEW_IP=\$$VAR_NAME"
     if [ -n "$NEW_IP" ]; then
         mkdir -p "$HOME/.kayacan"
         if [ -f "$CONFIG_FILE" ]; then
