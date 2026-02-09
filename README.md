@@ -1,223 +1,32 @@
-# 🤖 Reachy Brain
+# KayaCan - Reachy Mini with Claude Brain
 
-Give your [Reachy Mini](https://www.pollen-robotics.com/reachy-mini/) robot a brain powered by Clawdbot, with voice interaction and persistent memory.
+Give your [Reachy Mini](https://www.pollen-robotics.com/reachy-mini/) robot a brain powered by Claude, with voice interaction and persistent memory.
 
 ## What It Does
 
-- **🎤 Voice Input**: Speak to Reachy, it transcribes with Whisper
-- **🧠 Memory**: Remembers you across conversations (Honcho)
-- **🗣️ Natural Voice**: Responds with realistic TTS (Chatterbox)
-- **🤖 Expressive**: Antennas pop when listening, head moves while talking
-- **💬 Smart**: Your Clawdbot agent is the brain
-
-## Quick Install
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/kayacancode/reachy-brain/main/install.sh | bash
-```
-
-Or manually:
-
-```bash
-git clone https://github.com/kayacancode/reachy-brain
-cd reachy-brain
-./install.sh
-```
-
-## Requirements
-
-| Requirement | Details |
-|-------------|---------|
-| **Reachy Mini** | On same network, running daemon |
-| **Clawdbot** | Installed and configured |
-| **Honcho Account** | Free at https://app.honcho.dev |
-| **macOS/Linux** | With Python 3.9+ |
-
-## Usage
-
-### From Clawdbot (Telegram, etc.)
-
-Just say **"listen"** to your Clawdbot:
-
-```
-You: listen
-Bot: 📡 LISTENING...
-[speak to Reachy]
-Bot: [responds through Reachy's speaker]
-```
-
-### Standalone Voice Loop
-
-**Push-to-talk mode** (press ENTER to speak):
-```bash
-reachy-listen --push-to-talk
-```
-
-**Wake word mode** (voice-activated, hands-free):
-```bash
-reachy-listen --wake-word
-```
-
-**Local testing** (test on your machine before deploying to robot):
-```bash
-reachy-listen --wake-word --local-mic --local-speaker
-```
-
-## Wake Word Setup
-
-Enable hands-free voice activation by training a custom wake word model for your bot.
-
-### Quick Start
-
-1. **Train your custom wake word model**:
-   ```bash
-   cd ~/.clawdbot/skills/reachy-brain
-   python scripts/train_wake_word.py --bot-name OpenClaw --record
-   ```
-
-2. **Follow the prompts**:
-   - Record 5-10 samples of saying "Hey [BotName]"
-   - Vary your tone and speed slightly for better accuracy
-   - The script will train a model automatically
-
-3. **Test it**:
-   ```bash
-   reachy-listen --wake-word --local-mic --local-speaker
-   ```
-
-4. **Deploy to robot**:
-   ```bash
-   reachy-listen --wake-word
-   ```
-
-### Using Pre-trained Models
-
-If you don't want to train a custom model, you can use pre-trained wake words:
-
-```bash
-export WAKE_WORD_MODEL="alexa"  # or "hey_jarvis"
-reachy-listen --wake-word
-```
-
-Available pre-trained models:
-- `alexa` - "Alexa"
-- `hey_jarvis` - "Hey Jarvis"
-
-### Wake Word Configuration
-
-Wake word settings in `~/.config/reachy-brain/config.json`:
-
-```json
-{
-  "wake_word": {
-    "enabled": true,
-    "bot_name": "OpenClaw",
-    "threshold": 0.5,
-    "confirmation_sound": true,
-    "antenna_response": true
-  }
-}
-```
-
-**Threshold tuning**:
-- Lower (0.3-0.4): More sensitive, may have false positives
-- Default (0.5): Good balance
-- Higher (0.6-0.7): Less sensitive, fewer false positives
-
-## Performance Improvements
-
-This version includes major performance enhancements:
-
-### Speech-to-Text (STT)
-- **Provider**: faster-whisper (default)
-- **Speed**: 2-4x faster than original Whisper
-- **Accuracy**: Identical to original Whisper
-- **Example**: 5-second audio: 2-3s → 0.5-1s
-
-Configure in `config.json`:
-```json
-{
-  "stt": {
-    "provider": "faster-whisper",
-    "model": "base",
-    "device": "cpu",
-    "compute_type": "int8"
-  }
-}
-```
-
-Models: `tiny`, `base` (recommended), `small`, `medium`, `large`
-
-### Text-to-Speech (TTS)
-- **Provider**: Piper TTS (default, local)
-- **Speed**: 6-10x faster than Chatterbox
-- **Quality**: High-quality neural TTS
-- **Latency**: 200-500ms per response
-- **Caching**: Common phrases cached for <50ms playback
-
-Configure in `config.json`:
-```json
-{
-  "tts": {
-    "provider": "piper",
-    "piper_voice": "en_US-lessac-medium",
-    "cache_enabled": true,
-    "fallback_to_macos": true
-  }
-}
-```
-
-Available voices: `en_US-lessac-medium`, `en_US-ryan-high`, `en_GB-alan-medium`
-
-**Providers**:
-- `piper` (recommended): Fast, local, high quality
-- `chatterbox`: Cloud-based, highest quality, slower
-- `macos`: System voice, fast but robotic
-
-### End-to-End Performance
-
-| Metric | Before | After | Improvement |
-|--------|--------|-------|-------------|
-| STT | 2-3s | 0.5-1s | 2-4x faster |
-| TTS | 3-5s | 0.3-0.5s | 6-10x faster |
-| TTS (cached) | 3-5s | <50ms | 60-100x faster |
-| **Total latency** | **8-12s** | **3-5s** | **2-3x faster** |
-
-## Configuration
-
-Config lives at `~/.config/reachy-brain/config.json`:
-
-```json
-{
-  "reachy": {
-    "ip": "192.168.1.171",
-    "port": 8000,
-    "ssh_user": "pollen",
-    "ssh_pass": "your-password"
-  },
-  "honcho": {
-    "api_key": "hch-...",
-    "workspace": "reachy-brain"
-  },
-  "agent": {
-    "name": "ReachyBot",
-    "personality": "A friendly robot assistant"
-  }
-}
-```
+- **Voice Input**: Speak to Reachy via browser microphone, transcribed with Whisper
+- **Claude Brain**: Powered by Claude via OpenClaw (Clawdbot)
+- **Persistent Memory**: Remembers you across conversations with Honcho
+- **Natural Voice**: Responds with ElevenLabs TTS through the robot speaker
+- **Expressive**: Head movements, antenna pops, dances, and emotions
+- **Camera Vision**: Can describe what it sees through its camera
 
 ## Architecture
 
 ```
 ┌─────────────┐     ┌──────────────┐     ┌─────────────┐
-│   You       │────▶│  Reachy Mic  │────▶│   Whisper   │
-│  (speak)    │     │   (record)   │     │   (STT)     │
+│   Browser   │────▶│  Gradio UI   │────▶│   Whisper   │
+│   (speak)   │     │  (WebRTC)    │     │   (STT)     │
 └─────────────┘     └──────────────┘     └──────┬──────┘
                                                 │
-                                                ▼
-┌─────────────┐     ┌──────────────┐     ┌─────────────┐
-│  Reachy     │◀────│  Chatterbox  │◀────│  Clawdbot   │
-│  Speaker    │     │    (TTS)     │     │   + Honcho  │
+                    ┌──────────────┐     ┌──────▼──────┐
+                    │   Honcho     │◀───▶│  Claude     │
+                    │  (memory)    │     │ (OpenClaw)  │
+                    └──────────────┘     └──────┬──────┘
+                                                │
+┌─────────────┐     ┌──────────────┐     ┌──────▼──────┐
+│   Robot     │◀────│  ElevenLabs  │◀────│   Tools     │
+│  Speaker    │     │   (TTS)      │     │ (movement)  │
 └─────────────┘     └──────────────┘     └─────────────┘
 ```
 
@@ -225,15 +34,135 @@ Config lives at `~/.config/reachy-brain/config.json`:
 
 | Component | Provider | Notes |
 |-----------|----------|-------|
-| STT | faster-whisper / Whisper | Local, free, runs on your machine |
-| TTS | Piper / Chatterbox / macOS | Piper recommended (fast & local) |
-| Memory | Honcho | Cloud API, free tier available |
-| Brain | OpenClaw | Your existing agent |
-| Robot | Reachy Mini | REST API at port 8000 |
+| **UI** | Gradio + fastrtc | Browser-based WebRTC audio |
+| **STT** | OpenAI Whisper | Cloud API |
+| **LLM** | Claude (OpenClaw) | Via Clawdbot proxy |
+| **TTS** | ElevenLabs | Plays on robot speaker |
+| **Memory** | Honcho | Persistent user context |
+| **Robot** | Reachy Mini | REST API + WebRTC |
+
+## Project Structure
+
+```
+reachy-mini/
+├── pollen_app/                    # Pollen's conversation app (modified)
+│   └── src/reachy_mini_conversation_app/
+│       ├── main.py                # Entry point, --clawdbot flag
+│       ├── clawdbot_handler.py    # Our handler (Whisper→Claude→ElevenLabs)
+│       ├── tools/
+│       │   ├── core_tools.py      # Tool registry
+│       │   ├── honcho_recall.py   # Memory recall tool
+│       │   └── honcho_remember.py # Memory save tool
+│       └── .env                   # API keys (on robot)
+├── reachy_agent/                  # Standalone agent modules
+│   ├── clawdbot.py               # OpenClaw HTTP client
+│   ├── memory.py                 # Honcho memory wrapper
+│   ├── stt.py                    # Whisper transcription
+│   └── tts.py                    # ElevenLabs synthesis
+└── SKILL.md                      # MCP skill definition
+```
+
+## Setup
+
+### Prerequisites
+
+- Reachy Mini robot on your network
+- OpenClaw running locally (Clawdbot proxy)
+- API keys for: OpenAI (Whisper), ElevenLabs, Honcho
+
+### 1. Clone and Install
+
+```bash
+git clone https://github.com/kayacancode/reachy-mini
+cd reachy-mini
+```
+
+### 2. Configure Environment
+
+Create `.env` file with your keys:
+
+```bash
+# Clawdbot (OpenClaw endpoint)
+CLAWDBOT_ENDPOINT="http://YOUR_MAC_IP:18789/v1/chat/completions"
+CLAWDBOT_TOKEN="your-openclaw-token"
+CLAWDBOT_MODEL="claude-sonnet-4-20250514"
+
+# OpenAI (for Whisper STT)
+OPENAI_API_KEY="sk-..."
+
+# ElevenLabs (TTS)
+ELEVENLABS_API_KEY="..."
+ELEVENLABS_VOICE_ID="21m00Tcm4TlvDq8ikWAM"
+
+# Honcho (memory)
+HONCHO_API_KEY="..."
+HONCHO_WORKSPACE_ID="reachy-mini"
+
+# Enable Clawdbot mode
+USE_CLAWDBOT=true
+```
+
+### 3. Deploy to Robot
+
+```bash
+# Copy the modified conversation app to robot
+sshpass -p "root" scp -r pollen_app/src/reachy_mini_conversation_app/* \
+  pollen@REACHY_IP:/venvs/apps_venv/lib/python3.12/site-packages/reachy_mini_conversation_app/
+
+# Restart the app
+curl -X POST "http://REACHY_IP:8000/api/apps/restart-current-app"
+```
+
+### 4. Start OpenClaw
+
+On your Mac (must be reachable from robot):
+
+```bash
+openclaw serve --host 0.0.0.0 --port 18789
+```
+
+### 5. Access the UI
+
+The app launches with a Gradio share URL (HTTPS required for browser microphone):
+
+```
+https://XXXXXX.gradio.live
+```
+
+Check robot logs for the URL:
+```bash
+ssh pollen@REACHY_IP "journalctl -u reachy-mini-launcher -f"
+```
+
+## Usage
+
+1. Open the Gradio share URL in your browser
+2. Click "Record" and speak to Reachy
+3. Your speech is transcribed, sent to Claude, and the response plays from the robot's speaker
+
+### Voice Commands
+
+- **"What do you see?"** - Uses camera to describe surroundings
+- **"Do a happy dance"** - Triggers dance animation
+- **"Look up"** - Moves head
+- **"What do you remember about me?"** - Recalls memory
+- **"Remember that I like coffee"** - Saves to memory
+
+## Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `camera` | Take a photo and describe it |
+| `dance` | Play a dance animation |
+| `play_emotion` | Express an emotion |
+| `move_head` | Move head (pitch/yaw/roll) |
+| `head_tracking` | Enable/disable face tracking |
+| `honcho_recall` | Query user memory |
+| `honcho_remember` | Save to user memory |
 
 ## API Reference
 
-### Reachy Endpoints
+### Reachy Mini Endpoints
 
 ```bash
 # Daemon Status
@@ -243,7 +172,7 @@ curl http://REACHY_IP:8000/api/daemon/status
 curl -X POST "http://REACHY_IP:8000/api/daemon/start?wake_up=true"
 curl -X POST http://REACHY_IP:8000/api/move/play/goto_sleep
 
-# Move head (smooth interpolation)
+# Move head
 curl -X POST http://REACHY_IP:8000/api/move/goto \
   -H "Content-Type: application/json" \
   -d '{"head_pose": {"pitch": 10, "yaw": 20, "roll": 0}, "duration": 0.5}'
@@ -252,11 +181,6 @@ curl -X POST http://REACHY_IP:8000/api/move/goto \
 curl -X POST http://REACHY_IP:8000/api/move/goto \
   -H "Content-Type: application/json" \
   -d '{"antennas": [45, 45], "duration": 0.3}'
-
-# Combined movement (head + antennas + body)
-curl -X POST http://REACHY_IP:8000/api/move/goto \
-  -H "Content-Type: application/json" \
-  -d '{"head_pose": {"pitch": 10, "yaw": 15}, "antennas": [30, 30], "duration": 1.0, "interpolation": "minjerk"}'
 
 # Play emotion
 curl -X POST http://REACHY_IP:8000/api/move/play/recorded-move-dataset/pollen-robotics/reachy-mini-emotions-library/cheerful1
@@ -268,33 +192,96 @@ curl -X POST http://REACHY_IP:8000/api/move/play/recorded-move-dataset/pollen-ro
 curl http://REACHY_IP:8000/api/volume/current
 curl -X POST http://REACHY_IP:8000/api/volume/set \
   -H "Content-Type: application/json" -d '{"volume": 75}'
+
+# App management
+curl http://REACHY_IP:8000/api/apps/list
+curl -X POST http://REACHY_IP:8000/api/apps/restart-current-app
 ```
 
-> **Note:** Audio recording uses the Reachy Mini Python SDK (`reachy_mini.media`) via SSH, not the REST API.
+## ClawdbotHandler Pipeline
 
-### SSH Access
+The `ClawdbotHandler` class implements the full voice interaction loop:
 
-```bash
-ssh pollen@REACHY_IP  # password from config
+```python
+class ClawdbotHandler(AsyncStreamHandler):
+    async def receive(audio_frame):
+        # 1. Accumulate audio frames
+        # 2. Detect speech (RMS-based VAD)
+        # 3. On speech end → process
+
+    async def _process_speech():
+        # 1. Whisper STT (16kHz audio → text)
+        # 2. Get Honcho memory context
+        # 3. Claude LLM (with tools)
+        # 4. Execute tool calls
+        # 5. ElevenLabs TTS → robot speaker
 ```
 
 ## Troubleshooting
 
-**Can't connect to Reachy**
-- Check IP address: `ping REACHY_IP`
-- Verify daemon: `curl http://REACHY_IP:8042/api/status`
+### "Connection refused" to OpenClaw
+- Ensure OpenClaw is running: `openclaw serve --host 0.0.0.0 --port 18789`
+- Check firewall allows port 18789
+- Verify robot can reach your Mac: `ping YOUR_MAC_IP` from robot
 
-**Whisper not working**
-- Install: `pip install openai-whisper`
-- Or: `brew install openai-whisper`
+### No audio from robot speaker
+- Check volume: `curl http://REACHY_IP:8000/api/volume/current`
+- Increase volume: `curl -X POST http://REACHY_IP:8000/api/volume/set -d '{"volume": 80}'`
 
-**TTS sounds robotic**
-- Chatterbox runs on HuggingFace (may have latency)
-- Check: https://huggingface.co/spaces/ResembleAI/chatterbox-turbo-demo
+### Microphone not working in browser
+- Must use HTTPS (Gradio share URL)
+- Allow microphone permission in browser
+- Check browser console for errors
 
-**Memory not working**
-- Verify Honcho key at https://app.honcho.dev
-- Check workspace exists
+### Whisper 401 Unauthorized
+- Verify OpenAI API key is valid
+- Check `.env` file on robot has correct key
+
+### "Something went wrong" responses
+- OpenClaw not running or unreachable
+- Check robot logs: `journalctl -u reachy-mini-launcher -f`
+
+### App won't start (port in use)
+```bash
+# Kill old process and restart
+ssh pollen@REACHY_IP "sudo fuser -k 7862/tcp"
+curl -X POST http://REACHY_IP:8000/api/apps/restart-current-app
+```
+
+## Development
+
+### Local Testing
+
+```bash
+cd pollen_app
+uv pip install -e ".[clawdbot]"
+python -m reachy_mini_conversation_app.main --clawdbot --gradio
+```
+
+### Viewing Logs
+
+```bash
+# Robot daemon logs
+ssh pollen@REACHY_IP "journalctl -u reachy-mini-launcher -f"
+
+# Or via dashboard
+open http://REACHY_IP:8000/logs
+```
+
+### Updating Code on Robot
+
+```bash
+# Single file update
+sshpass -p "root" scp clawdbot_handler.py \
+  pollen@REACHY_IP:/venvs/apps_venv/lib/python3.12/site-packages/reachy_mini_conversation_app/
+
+# Restart app
+curl -X POST http://REACHY_IP:8000/api/apps/restart-current-app
+```
+
+## MCP Skill
+
+This project includes an MCP skill for controlling Reachy from Claude Code. See `SKILL.md` for the skill definition and available tools.
 
 ## License
 
@@ -302,4 +289,6 @@ MIT
 
 ## Credits
 
-Built with 🫧 by KayaCan
+Built with Claude by KayaCan
+
+Based on [Pollen Robotics' conversation app](https://huggingface.co/spaces/pollen-robotics/reachy_mini_conversation_app)
