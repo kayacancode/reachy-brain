@@ -103,8 +103,8 @@ export ELEVENLABS_VOICE_ID="IKne3meq5aSn9XLyUdCD"
 ./sleep.sh
 
 # With custom IP
-./wake.sh 10.0.0.68
-./sleep.sh 10.0.0.68
+./wake.sh  [ip]
+./sleep.sh [ip]
 ```
 
 ## Files
