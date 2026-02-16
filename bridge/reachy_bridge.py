@@ -51,6 +51,7 @@ import numpy as np
 import argparse
 import socket
 import cv2
+import subprocess
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # Add the Reachy SDK to path
@@ -305,16 +306,19 @@ def play_wav_data(wav_bytes):
     buf = io.BytesIO(wav_bytes)
     with wave.open(buf, 'rb') as wf:
         frames = wf.readframes(wf.getnframes())
+        nframes = wf.getnframes()
         sr = wf.getframerate()
         nc = wf.getnchannels()
         # Cooper's playback pattern
         audio = np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32768.0
-        if nc == 1:
-            audio = np.column_stack([audio, audio])  # Convert to stereo
+        if nc == 2:
+            audio = audio.reshape(-1, 2)  # Reshape to (num_samples, 2) for stereo
+        elif nc == 1:
+            audio = np.column_stack([audio, audio])  # Convert mono to stereo
 
     robot.media.start_playing()
     robot.media.push_audio_sample(audio)
-    time.sleep(len(audio) / sr + 0.5)  # Cooper's timing
+    time.sleep(nframes / sr + 0.5)  # Use actual frame count for timing
     robot.media.stop_playing()
 
 def reachy_api(method, endpoint, data=None):
@@ -361,6 +365,131 @@ def play_custom_animation(name):
 
     return {"status": "ok", "animation": name, "steps": len(steps)}
 
+# Camera: background frame grabber via daemon's Unix socket
+_latest_frame = {"jpeg": None, "timestamp": 0}
+_latest_frame_lock = threading.Lock()
+_camera_thread = None
+_camera_active = False
+CAMERA_SOCKET = "/tmp/reachymini_camera_socket"
+
+def _capture_frame_fallback():
+    """Return the latest cached frame from the background camera thread, or None."""
+    with _latest_frame_lock:
+        if _latest_frame["jpeg"] and (time.time() - _latest_frame["timestamp"]) < 5.0:
+            return _latest_frame["jpeg"]
+    return None
+
+def _camera_grabber():
+    """Background thread: grab frames from daemon's camera via Unix socket.
+    
+    The daemon shares camera frames through /tmp/reachymini_camera_socket.
+    We use GStreamer's unixfdsrc to read from it, convert to BGR, and cache
+    JPEG snapshots for the /snapshot endpoint.
+    """
+    global _camera_active
+    
+    print("📷 Camera grabber starting...", flush=True)
+    
+    if not os.path.exists(CAMERA_SOCKET):
+        print(f"📷 Camera socket {CAMERA_SOCKET} not found, trying SDK get_frame() loop", flush=True)
+        # Fallback to SDK get_frame (may work if camera was available at init)
+        while _camera_active:
+            try:
+                if robot is not None:
+                    frame = robot.media.get_frame()
+                    if frame is not None:
+                        _, encoded = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                        with _latest_frame_lock:
+                            _latest_frame["jpeg"] = encoded.tobytes()
+                            _latest_frame["timestamp"] = time.time()
+            except Exception as e:
+                print(f"📷 SDK frame error: {e}", flush=True)
+            time.sleep(0.5)
+        return
+    
+    print(f"📷 Found camera socket at {CAMERA_SOCKET}", flush=True)
+    
+    # Use GStreamer to read from the daemon's camera socket
+    try:
+        import gi
+        gi.require_version("Gst", "1.0")
+        gi.require_version("GstApp", "1.0")
+        from gi.repository import Gst, GstApp, GLib
+        
+        Gst.init(None)
+        
+        # Build pipeline: unixfdsrc → queue → v4l2convert → appsink
+        pipeline_str = (
+            f'unixfdsrc socket-path={CAMERA_SOCKET} ! '
+            'queue ! '
+            'v4l2convert ! '
+            'video/x-raw,format=BGR,width=640,height=480 ! '
+            'appsink name=sink emit-signals=false drop=true max-buffers=1'
+        )
+        
+        pipeline = Gst.parse_launch(pipeline_str)
+        appsink = pipeline.get_by_name("sink")
+        
+        pipeline.set_state(Gst.State.PLAYING)
+        print("📷 GStreamer camera pipeline started!", flush=True)
+        
+        while _camera_active:
+            try:
+                sample = appsink.try_pull_sample(Gst.SECOND)  # 1 second timeout
+                if sample is not None:
+                    buf = sample.get_buffer()
+                    if buf is not None:
+                        data = buf.extract_dup(0, buf.get_size())
+                        # Convert raw BGR to numpy array
+                        frame = np.frombuffer(data, dtype=np.uint8).reshape((480, 640, 3))
+                        _, encoded = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                        with _latest_frame_lock:
+                            _latest_frame["jpeg"] = encoded.tobytes()
+                            _latest_frame["timestamp"] = time.time()
+            except Exception as e:
+                print(f"📷 GStreamer frame error: {e}", flush=True)
+                time.sleep(1)
+        
+        pipeline.set_state(Gst.State.NULL)
+        
+    except ImportError:
+        print("📷 GStreamer (gi) not available, trying ffmpeg fallback...", flush=True)
+        # FFmpeg fallback: grab from unix socket via GStreamer CLI
+        while _camera_active:
+            try:
+                result = subprocess.run(
+                    ["gst-launch-1.0", "-q",
+                     "unixfdsrc", f"socket-path={CAMERA_SOCKET}", "num-buffers=1", "!",
+                     "v4l2convert", "!",
+                     "video/x-raw,format=BGR,width=640,height=480", "!",
+                     "jpegenc", "!",
+                     "filesink", "location=/tmp/bridge_snap.jpg"],
+                    capture_output=True, timeout=5
+                )
+                if result.returncode == 0 and os.path.exists("/tmp/bridge_snap.jpg"):
+                    with open("/tmp/bridge_snap.jpg", "rb") as f:
+                        jpeg_bytes = f.read()
+                    if len(jpeg_bytes) > 100:
+                        with _latest_frame_lock:
+                            _latest_frame["jpeg"] = jpeg_bytes
+                            _latest_frame["timestamp"] = time.time()
+            except Exception as e:
+                print(f"📷 FFmpeg fallback error: {e}", flush=True)
+            time.sleep(1)
+    
+    except Exception as e:
+        print(f"📷 Camera grabber fatal error: {e}", flush=True)
+    
+    print("📷 Camera grabber stopped", flush=True)
+
+def start_camera_grabber():
+    """Start background camera frame grabber."""
+    global _camera_thread, _camera_active
+    _camera_active = True
+    _camera_thread = threading.Thread(target=_camera_grabber, daemon=True)
+    _camera_thread.start()
+
+
 class BridgeHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         print(f"[{time.strftime('%H:%M:%S')}] {args[0]}", flush=True)
@@ -394,18 +523,31 @@ class BridgeHandler(BaseHTTPRequestHandler):
             })
 
         elif self.path == '/snapshot':
-            # Camera snapshot endpoint for remote face recognition
+            # Camera snapshot endpoint — tries SDK first, then ffmpeg fallback
             try:
                 if robot is None:
                     self._respond(503, {"error": "Robot not connected"})
                     return
 
+                # Try SDK first
                 frame = robot.media.get_frame()
+                
+                # Fallback: use libcamera-still via subprocess
+                # This requires the daemon to not hold the camera, so we
+                # use ffmpeg with v4l2 as a second attempt
                 if frame is None:
-                    self._respond(503, {"error": "No frame available"})
+                    jpeg_bytes = _capture_frame_fallback()
+                    if jpeg_bytes:
+                        self.send_response(200)
+                        self.send_header('Content-Type', 'image/jpeg')
+                        self.send_header('Content-Length', str(len(jpeg_bytes)))
+                        self.end_headers()
+                        self.wfile.write(jpeg_bytes)
+                        return
+                    self._respond(503, {"error": "No frame available (SDK and fallback both failed)"})
                     return
 
-                # Encode as JPEG
+                # Encode SDK frame as JPEG
                 _, encoded = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
                 jpeg_bytes = encoded.tobytes()
 
@@ -565,6 +707,9 @@ def main():
     print(f"🎚️  Noise threshold: {NOISE_THRESHOLD}")
     print(f"⏱️  Chunk duration: {CHUNK_DURATION}s")
     print(f"🔇 Silence trigger: {SILENCE_CHUNKS_TO_TRIGGER} chunks")
+    
+    # Start camera frame grabber
+    start_camera_grabber()
     
     # Auto-start listening if macOS host is configured (and not disabled)
     if macos_host and not args.no_listen:
