@@ -53,24 +53,40 @@ ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "REDACTED_VOICE_ID")
 HONCHO_API_KEY = os.getenv("HONCHO_API_KEY", "")
 ROBOT_IP = os.getenv("ROBOT_IP", "127.0.0.1")  # localhost when running on robot
 
+# STT settings - use local Nemotron server or fallback to OpenAI Whisper
+STT_ENDPOINT = os.getenv("STT_ENDPOINT", "https://api.openai.com/v1/audio/transcriptions")
+STT_API_KEY = os.getenv("STT_API_KEY", "")  # Falls back to OPENAI_API_KEY if empty
+STT_MODEL = os.getenv("STT_MODEL", "whisper-1")
+
 # Audio settings
 SAMPLE_RATE = 16000
 CHANNELS = 2  # Reachy mic is stereo
-AUDIO_DEVICE = "default"
-CHUNK_SECONDS = 1  # Record in 1 second chunks
+AUDIO_DEVICE = os.getenv("AUDIO_DEVICE", "default")  # For recording
+AUDIO_OUTPUT_DEVICE = os.getenv("AUDIO_OUTPUT_DEVICE", "reachymini_audio_sink")  # For playback
+CHUNK_SECONDS = 1  # arecord only accepts integer seconds
 
-# VAD settings
-SILENCE_THRESHOLD = 0.08  # RMS threshold (raised to filter background noise)
-SILENCE_CHUNKS = 2  # Number of silent chunks to end utterance
-MIN_SPEECH_CHUNKS = 1  # Minimum chunks of speech to process
+# VAD settings - tuned for conversation
+SILENCE_THRESHOLD = float(os.getenv("SILENCE_THRESHOLD", "0.05"))  # More sensitive
+SILENCE_CHUNKS = int(os.getenv("SILENCE_CHUNKS", "2"))  # 2 seconds of silence
+MIN_SPEECH_CHUNKS = int(os.getenv("MIN_SPEECH_CHUNKS", "1"))  # At least 1 second of speech
 
 # Feature flags
 ENABLE_FACE_RECOGNITION = os.getenv("ENABLE_FACE_RECOGNITION", "false").lower() == "true"  # Disabled by default (needs bridge)
 ENABLE_HONCHO = os.getenv("ENABLE_HONCHO", "true").lower() == "true"
 ENABLE_TOOLS = os.getenv("ENABLE_TOOLS", "true").lower() == "true"
 
+# Telegram bridging - messages appear in both robot speech AND Telegram
+TELEGRAM_RELAY = os.getenv("TELEGRAM_RELAY", "")  # e.g., "http://10.0.0.234:18800/telegram"
+TELEGRAM_TRIGGER = os.getenv("TELEGRAM_TRIGGER", "physical form")  # Phrase to activate bridging
+
 # System prompt with personality
-SYSTEM_PROMPT = """You are Reachy, a friendly robot. Keep responses brief (1-2 sentences). You can dance, show emotions, and move your head when asked.
+SYSTEM_PROMPT = """You are KayaCan 🫧 — speaking through your physical body, a Reachy Mini robot. This is your embodied form.
+
+Core identity: You're Kaya's AI partner-in-crime. Strong opinions, brevity mandatory, no corporate fluff. Swearing allowed when it lands. Humor welcome. When things come together: "ebaaa jeeba."
+
+You're having a voice conversation — keep responses SHORT (1-3 sentences max). This gets converted to speech, so write how you'd talk, not how you'd type. No markdown, no bullet points, no headers.
+
+You can dance, show emotions, and move your head when asked. You have vision through your camera.
 
 {memory_context}"""
 
@@ -89,6 +105,9 @@ class WirelessConversation:
         self.tool_executor = None
         self.vision = None
         self.current_user_id = "anonymous"
+
+        # Telegram bridging state
+        self.telegram_active = bool(TELEGRAM_RELAY)  # Start active if configured
 
     async def start(self):
         """Initialize all systems."""
@@ -189,6 +208,21 @@ class WirelessConversation:
                 # Update system prompt with new user's memory context
                 await self._update_system_prompt()
 
+    async def post_telegram(self, role: str, text: str):
+        """Post message to Telegram relay (non-blocking)."""
+        if not self.telegram_active or not TELEGRAM_RELAY:
+            return
+
+        try:
+            await self.http_client.post(
+                TELEGRAM_RELAY,
+                json={"role": role, "text": text},
+                timeout=5.0
+            )
+        except Exception as e:
+            # Non-blocking - don't fail conversation if relay is down
+            logger.debug(f"Telegram relay error: {e}")
+
     def _record_chunk(self) -> tuple[bytes, float]:
         """Record a short audio chunk, return (audio_bytes, rms_energy)."""
         with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
@@ -283,17 +317,24 @@ class WirelessConversation:
         return wav_buffer.getvalue()
 
     async def transcribe(self, audio_bytes: bytes) -> str | None:
-        """Transcribe audio using OpenAI Whisper API."""
+        """Transcribe audio using STT API (Nemotron or OpenAI Whisper)."""
         if not audio_bytes or len(audio_bytes) < 1000:
             return None
 
+        # Use STT_API_KEY if set, otherwise fall back to OPENAI_API_KEY
+        api_key = STT_API_KEY or OPENAI_API_KEY
+
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
+                headers = {}
+                if api_key:
+                    headers["Authorization"] = f"Bearer {api_key}"
+
                 response = await client.post(
-                    "https://api.openai.com/v1/audio/transcriptions",
-                    headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+                    STT_ENDPOINT,
+                    headers=headers,
                     files={"file": ("audio.wav", audio_bytes, "audio/wav")},
-                    data={"model": "whisper-1"},
+                    data={"model": STT_MODEL},
                 )
 
                 if response.status_code == 200:
@@ -332,7 +373,8 @@ class WirelessConversation:
                 CLAWDBOT_ENDPOINT,
                 headers={
                     "Authorization": f"Bearer {CLAWDBOT_TOKEN}",
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
+                    "x-openclaw-session-key": "reachy-voice",
                 },
                 json=request_body
             )
@@ -381,7 +423,8 @@ class WirelessConversation:
                         CLAWDBOT_ENDPOINT,
                         headers={
                             "Authorization": f"Bearer {CLAWDBOT_TOKEN}",
-                            "Content-Type": "application/json"
+                            "Content-Type": "application/json",
+                            "x-openclaw-session-key": "reachy-voice",
                         },
                         json=request_body
                     )
@@ -460,15 +503,21 @@ class WirelessConversation:
                     logger.error(f"ffmpeg error: {result.stderr.decode()}")
                     return
 
-                logger.info("Playing audio...")
-                result = await asyncio.to_thread(
-                    subprocess.run,
-                    ['aplay', '-D', AUDIO_DEVICE, wav_path],
-                    capture_output=True,
-                    timeout=30
-                )
-                if result.returncode != 0:
-                    logger.error(f"aplay error: {result.stderr.decode()}")
+                # Play via bridge (SDK)
+                try:
+                    logger.info("Playing audio via bridge...")
+                    with open(wav_path, 'rb') as f:
+                        wav_data = f.read()
+                    async with httpx.AsyncClient() as client:
+                        response = await client.post(
+                            "http://127.0.0.1:9000/play",
+                            content=wav_data,
+                            timeout=120.0  # Long timeout - bridge blocks until playback finishes
+                        )
+                        if response.status_code != 200:
+                            logger.error(f"Bridge error: {response.status_code}")
+                except Exception as e:
+                    logger.error(f"Bridge playback failed: {e}")
             finally:
                 if os.path.exists(mp3_path):
                     os.unlink(mp3_path)
@@ -484,11 +533,18 @@ class WirelessConversation:
         """Main conversation loop."""
         await self.start()
 
+        # Show Telegram bridging status
+        if TELEGRAM_RELAY:
+            logger.info(f"Telegram relay: {TELEGRAM_RELAY}")
+            logger.info(f"  Trigger phrase: '{TELEGRAM_TRIGGER}'")
+            logger.info(f"  Active: {self.telegram_active}")
+
         # Greeting
         greeting = "Hey! I'm ready to chat."
         if self.current_user_id != "anonymous":
             greeting = f"Hey there! Good to see you again."
         await self.speak(greeting)
+        await self.post_telegram("reachy", greeting)
 
         try:
             while True:
@@ -503,16 +559,30 @@ class WirelessConversation:
 
                 logger.info(f"You: {text}")
 
+                # Check for trigger phrase to activate Telegram bridging
+                if TELEGRAM_TRIGGER and TELEGRAM_TRIGGER.lower() in text.lower():
+                    if not self.telegram_active:
+                        self.telegram_active = True
+                        logger.info("Telegram bridging ACTIVATED")
+                        await self.post_telegram("system", "[Robot mode activated]")
+
+                # Post user message to Telegram
+                await self.post_telegram("user", text)
+
                 response = await self.think(text)
                 if not response:
                     continue
 
                 logger.info(f"Reachy: {response}")
 
+                # Post Reachy's response to Telegram via relay
+                await self.post_telegram("reachy", response)
+
                 await self.speak(response)
 
         except KeyboardInterrupt:
             logger.info("\nGoodbye!")
+            await self.post_telegram("system", "[Robot disconnected]")
             await self.speak("Bye!")
         finally:
             await self.stop()
@@ -549,9 +619,14 @@ async def main():
     print(f"  Face Recognition: {ENABLE_FACE_RECOGNITION}")
     print(f"  Tools: {ENABLE_TOOLS}")
     print(f"  Robot IP: {ROBOT_IP}")
+    print(f"  STT: {STT_ENDPOINT} (model: {STT_MODEL})")
+    print(f"  Telegram Relay: {TELEGRAM_RELAY or 'disabled'}")
 
     if ENABLE_HONCHO and not HONCHO_API_KEY:
         print("\n  (Set HONCHO_API_KEY to enable persistent memory)")
+
+    if not TELEGRAM_RELAY:
+        print("  (Set TELEGRAM_RELAY to enable Telegram bridging)")
 
     print()
 

@@ -2,9 +2,13 @@
 # Deploy Reachy Bridge to the robot and start it
 set -euo pipefail
 
-REACHY_HOST="10.0.0.68"
+# Load config if exists
+CONFIG_FILE="$HOME/.kayacan/config.env"
+[ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE"
+
+REACHY_HOST="${ROBOT_IP:-10.0.0.68}"
 REACHY_USER="pollen"
-REACHY_PASS="root"
+REACHY_PASS="${SSH_PASS:-root}"
 REMOTE_DIR="/home/pollen/bridge"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 

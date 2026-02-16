@@ -2,7 +2,11 @@
 # Wake up Reachy Mini robot
 # Usage: ./wake.sh [IP]
 
-IP="${1:-192.168.23.66}"
+# Load config if exists
+CONFIG_FILE="$HOME/.kayacan/config.env"
+[ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE"
+
+IP="${1:-${ROBOT_IP:-192.168.23.66}}"
 
 echo "Waking up Reachy at $IP..."
 

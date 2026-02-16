@@ -137,8 +137,16 @@ echo "----------------"
 echo "Leave blank to keep existing value."
 echo ""
 
-# Load existing values if any
+# Save new connection values before sourcing old config
+_NEW_ROBOT_IP="$ROBOT_IP"
+_NEW_SSH_PASS="$SSH_PASS"
+
+# Load existing API key values if any
 [ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE"
+
+# Restore the new connection values
+ROBOT_IP="$_NEW_ROBOT_IP"
+SSH_PASS="$_NEW_SSH_PASS"
 
 read -p "OpenAI API Key (for Whisper) [${OPENAI_API_KEY:0:10}...]: " new_openai
 [ -n "$new_openai" ] && OPENAI_API_KEY="$new_openai"

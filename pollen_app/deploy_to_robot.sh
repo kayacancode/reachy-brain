@@ -2,9 +2,13 @@
 # Deploy Clawdbot-modified conversation app to Reachy Mini robot
 set -euo pipefail
 
-REACHY_HOST="${REACHY_HOST:-10.0.0.68}"
+# Load config if exists
+CONFIG_FILE="$HOME/.kayacan/config.env"
+[ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE"
+
+REACHY_HOST="${ROBOT_IP:-${REACHY_HOST:-10.0.0.68}}"
 REACHY_USER="pollen"
-REACHY_PASS="root"
+REACHY_PASS="${SSH_PASS:-root}"
 REMOTE_APP_DIR="/venvs/apps_venv/lib/python3.12/site-packages/reachy_mini_conversation_app"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SRC_DIR="$SCRIPT_DIR/src/reachy_mini_conversation_app"
@@ -58,24 +62,34 @@ sshpass -p "$REACHY_PASS" ssh -o StrictHostKeyChecking=no -o PubkeyAuthenticatio
   "$REACHY_USER@$REACHY_HOST" \
   "source /venvs/apps_venv/bin/activate && pip install -q honcho-ai pydub httpx"
 
-# Update .env with Clawdbot config
+# Update .env with Clawdbot config (use config values with fallbacks)
 echo "📦 Updating .env..."
+
+# Set defaults if not in config
+: "${CLAWDBOT_ENDPOINT:=http://10.0.0.234:18789/v1/chat/completions}"
+: "${CLAWDBOT_TOKEN:=REDACTED_CLAWDBOT_TOKEN}"
+: "${CLAWDBOT_MODEL:=claude-sonnet-4-20250514}"
+: "${ELEVENLABS_API_KEY:=REDACTED_ELEVENLABS_KEY}"
+: "${ELEVENLABS_VOICE_ID:=REDACTED_VOICE_ID}"
+: "${HONCHO_API_KEY:=REDACTED_HONCHO_KEY}"
+: "${HONCHO_WORKSPACE_ID:=openclaw}"
+
 sshpass -p "$REACHY_PASS" ssh -o StrictHostKeyChecking=no -o PubkeyAuthentication=no \
-  "$REACHY_USER@$REACHY_HOST" "cat >> $REMOTE_APP_DIR/.env << 'EOF'
+  "$REACHY_USER@$REACHY_HOST" "cat >> $REMOTE_APP_DIR/.env << EOF
 
 # Clawdbot Mode
 USE_CLAWDBOT=true
-CLAWDBOT_ENDPOINT=http://10.0.0.234:18789/v1/chat/completions
-CLAWDBOT_TOKEN=REDACTED_CLAWDBOT_TOKEN
-CLAWDBOT_MODEL=claude-sonnet-4-20250514
+CLAWDBOT_ENDPOINT=$CLAWDBOT_ENDPOINT
+CLAWDBOT_TOKEN=$CLAWDBOT_TOKEN
+CLAWDBOT_MODEL=$CLAWDBOT_MODEL
 
 # ElevenLabs TTS
-ELEVENLABS_API_KEY=REDACTED_ELEVENLABS_KEY
-ELEVENLABS_VOICE_ID=REDACTED_VOICE_ID
+ELEVENLABS_API_KEY=$ELEVENLABS_API_KEY
+ELEVENLABS_VOICE_ID=$ELEVENLABS_VOICE_ID
 
 # Honcho memory
-HONCHO_API_KEY=REDACTED_HONCHO_KEY
-HONCHO_WORKSPACE_ID=openclaw
+HONCHO_API_KEY=$HONCHO_API_KEY
+HONCHO_WORKSPACE_ID=$HONCHO_WORKSPACE_ID
 
 # Profile
 REACHY_MINI_CUSTOM_PROFILE=kayacan
