@@ -539,12 +539,19 @@ class WirelessConversation:
             logger.info(f"  Trigger phrase: '{TELEGRAM_TRIGGER}'")
             logger.info(f"  Active: {self.telegram_active}")
 
-        # Greeting
-        greeting = "Hey! I'm ready to chat."
+        # Generate a natural intro via LLM (not hardcoded)
         if self.current_user_id != "anonymous":
-            greeting = f"Hey there! Good to see you again."
-        await self.speak(greeting)
-        await self.post_telegram("reachy", greeting)
+            intro_prompt = "[SYSTEM: You just came online in your robot body. Greet the user casually — introduce yourself briefly. Keep it to 1-2 sentences. You recognize this person.]"
+        else:
+            intro_prompt = "[SYSTEM: You just came online in your robot body. Introduce yourself casually to someone new — say your name and that you're ready to chat. Keep it to 1-2 sentences.]"
+        greeting = await self.think(intro_prompt)
+        if greeting:
+            await self.speak(greeting)
+            await self.post_telegram("reachy", greeting)
+        else:
+            # Fallback if LLM fails
+            await self.speak("Hey! I'm KayaCan. What's up?")
+            await self.post_telegram("reachy", "Hey! I'm KayaCan. What's up?")
 
         try:
             while True:
