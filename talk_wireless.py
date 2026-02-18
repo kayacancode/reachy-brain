@@ -25,8 +25,8 @@ import wave
 import httpx
 import numpy as np
 
-# Load config from ~/.kayacan/config.env
-config_path = os.path.expanduser("~/.kayacan/config.env")
+# Load config from ~/.reachy-brain/config.env
+config_path = os.path.expanduser("~/.reachy-brain/config.env")
 if os.path.exists(config_path):
     with open(config_path) as f:
         for line in f:

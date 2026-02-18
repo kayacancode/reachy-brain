@@ -9,12 +9,13 @@ openclaw gateway
 
 ### 2. On Your Mac - Wake up the robot
 ```bash
-curl -X POST "http://192.168.23.66:8000/api/daemon/start?wake_up=true"
+ROBOT_IP="${ROBOT_IP:-reachy-mini.local}"
+curl -X POST "http://$ROBOT_IP:8000/api/daemon/start?wake_up=true"
 ```
 
 ### 3. SSH to Robot
 ```bash
-ssh pollen@192.168.23.66  # password: root
+ssh pollen@${ROBOT_IP:-reachy-mini.local}  # password: root
 ```
 
 ### 4. On Robot - Start camera server (background)
@@ -53,8 +54,9 @@ python3 ~/enroll_face.py --delete kaya  # Remove a user
 ## Status Checks
 
 ```bash
-curl http://192.168.23.66:8000/api/daemon/status  # Robot daemon
-curl http://192.168.23.66:9001/status              # Camera server
+ROBOT_IP="${ROBOT_IP:-reachy-mini.local}"
+curl http://$ROBOT_IP:8000/api/daemon/status  # Robot daemon
+curl http://$ROBOT_IP:9001/status              # Camera server
 ```
 
 ---
@@ -77,9 +79,9 @@ pkill -f python3
 
 ## Environment
 
-Set these in `~/.kayacan/config.env`:
+Set these in `~/.reachy-brain/config.env` (see `.env.example` for all variables):
 ```bash
-ROBOT_IP="192.168.23.66"
+ROBOT_IP="reachy-mini.local"
 OPENAI_API_KEY="sk-..."
 ELEVENLABS_API_KEY="sk_..."
 HONCHO_API_KEY="hch-..."

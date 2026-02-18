@@ -1,11 +1,11 @@
 #!/bin/bash
-# KayaCan Setup Script - Quick setup for Reachy Mini with Claude Brain
+# Reachy Brain Setup Script - Quick setup for Reachy Mini with Claude Brain
 # Run this when you move to a new location or set up fresh
 
 set -e
 
 echo "=========================================="
-echo "  KayaCan - Reachy Mini Setup"
+echo "  Reachy Brain - Reachy Mini Setup"
 echo "=========================================="
 echo ""
 
@@ -20,8 +20,8 @@ DEFAULT_SSH_PASS="root"
 ROBOT_USER="pollen"
 
 # Config file location
-CONFIG_FILE="$HOME/.kayacan/config.env"
-mkdir -p "$HOME/.kayacan"
+CONFIG_FILE="$HOME/.reachy-brain/config.env"
+mkdir -p "$HOME/.reachy-brain"
 
 # Function to discover robot on network
 discover_robot() {
@@ -180,7 +180,7 @@ CLAWDBOT_MODEL=${new_model:-${CLAWDBOT_MODEL:-claude-sonnet-4-20250514}}
 echo ""
 echo "Saving configuration..."
 cat > "$CONFIG_FILE" << EOF
-# KayaCan Configuration - Generated $(date)
+# Reachy Brain Configuration - Generated $(date)
 ROBOT_IP="$ROBOT_IP"
 SSH_PASS="$SSH_PASS"
 OPENAI_API_KEY="$OPENAI_API_KEY"
@@ -197,15 +197,15 @@ echo -e "${GREEN}Saved to $CONFIG_FILE${NC}"
 echo ""
 echo "Step 5: Deploy to Robot"
 echo "-----------------------"
-read -p "Deploy KayaCan to robot now? [Y/n]: " do_deploy
+read -p "Deploy to robot now? [Y/n]: " do_deploy
 
 if [[ ! "$do_deploy" =~ ^[Nn] ]]; then
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
     # Create .env for robot
-    ROBOT_ENV="/tmp/kayacan_robot.env"
+    ROBOT_ENV="/tmp/reachy_brain_robot.env"
     cat > "$ROBOT_ENV" << EOF
-# KayaCan Robot Environment
+# Reachy Brain Robot Environment
 USE_CLAWDBOT=true
 OPENAI_API_KEY="$OPENAI_API_KEY"
 ELEVENLABS_API_KEY="$ELEVENLABS_API_KEY"

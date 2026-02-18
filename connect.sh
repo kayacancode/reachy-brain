@@ -10,8 +10,8 @@
 
 set -e
 
-CONFIG_FILE="$HOME/.kayacan/config.env"
-KNOWN_IPS_FILE="$HOME/.kayacan/known_ips.env"
+CONFIG_FILE="$HOME/.reachy-brain/config.env"
+KNOWN_IPS_FILE="$HOME/.reachy-brain/known_ips.env"
 
 # Load known IPs
 [ -f "$KNOWN_IPS_FILE" ] && source "$KNOWN_IPS_FILE"
@@ -22,7 +22,7 @@ if [ "$1" = "use" ] && [ -n "$2" ]; then
     VAR_NAME="REACHY_IP_${LOCATION_UPPER}"
     eval "NEW_IP=\$$VAR_NAME"
     if [ -n "$NEW_IP" ]; then
-        mkdir -p "$HOME/.kayacan"
+        mkdir -p "$HOME/.reachy-brain"
         if [ -f "$CONFIG_FILE" ]; then
             sed -i '' "s/ROBOT_IP=\"[^\"]*\"/ROBOT_IP=\"$NEW_IP\"/" "$CONFIG_FILE"
         else
@@ -85,7 +85,7 @@ case "${1:-status}" in
         echo "Deploying to $ROBOT_IP..."
 
         # Create .env for robot
-        ROBOT_ENV="/tmp/kayacan_robot.env"
+        ROBOT_ENV="/tmp/reachy_brain_robot.env"
         cat > "$ROBOT_ENV" << EOF
 USE_CLAWDBOT=true
 OPENAI_API_KEY="$OPENAI_API_KEY"

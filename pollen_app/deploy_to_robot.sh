@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # Load config if exists
-CONFIG_FILE="$HOME/.kayacan/config.env"
+CONFIG_FILE="$HOME/.reachy-brain/config.env"
 [ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE"
 
 REACHY_HOST="${ROBOT_IP:-${REACHY_HOST:-10.0.0.68}}"
@@ -44,8 +44,8 @@ sshpass -p "$REACHY_PASS" scp -o StrictHostKeyChecking=no -o PubkeyAuthenticatio
   "$SRC_DIR/main.py" \
   "$REACHY_USER@$REACHY_HOST:$REMOTE_APP_DIR/"
 
-# Copy KayaCan profile
-echo "📦 Copying KayaCan profile..."
+# Copy profile
+echo "📦 Copying profile..."
 sshpass -p "$REACHY_PASS" ssh -o StrictHostKeyChecking=no -o PubkeyAuthentication=no \
   "$REACHY_USER@$REACHY_HOST" "mkdir -p $REMOTE_APP_DIR/profiles/kayacan"
 
@@ -69,9 +69,9 @@ echo "📦 Updating .env..."
 : "${CLAWDBOT_ENDPOINT:=http://10.0.0.234:18789/v1/chat/completions}"
 : "${CLAWDBOT_TOKEN:=REDACTED_CLAWDBOT_TOKEN}"
 : "${CLAWDBOT_MODEL:=claude-sonnet-4-20250514}"
-: "${ELEVENLABS_API_KEY:=REDACTED_ELEVENLABS_KEY}"
+: "${ELEVENLABS_API_KEY:?ELEVENLABS_API_KEY not set}"
 : "${ELEVENLABS_VOICE_ID:=REDACTED_VOICE_ID}"
-: "${HONCHO_API_KEY:=REDACTED_HONCHO_KEY}"
+: "${HONCHO_API_KEY:?HONCHO_API_KEY not set}"
 : "${HONCHO_WORKSPACE_ID:=openclaw}"
 
 sshpass -p "$REACHY_PASS" ssh -o StrictHostKeyChecking=no -o PubkeyAuthentication=no \
@@ -99,7 +99,7 @@ echo "✅ Deployment complete!"
 echo ""
 echo "To start the app with Clawdbot mode:"
 echo "  1. Open Reachy dashboard: http://$REACHY_HOST:8000/"
-echo "  2. Start conversation app (it will use --clawdbot by default with kayacan profile)"
+echo "  2. Start conversation app (it will use --clawdbot by default with custom profile)"
 echo ""
 echo "Or start via API:"
 echo "  curl -X POST http://$REACHY_HOST:8000/api/apps/start-app/reachy_mini_conversation_app"

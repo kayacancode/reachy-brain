@@ -212,7 +212,7 @@ def run(
             additional_inputs=additional_inputs,
             additional_outputs=[chatbot],
             additional_outputs_handler=update_chatbot,
-            ui_args={"title": "Talk with KayaCan" if use_clawdbot else "Talk with Reachy Mini"},
+            ui_args={"title": f"Talk with {os.environ.get('AGENT_NAME', 'Reachy')}" if use_clawdbot else "Talk with Reachy Mini"},
         )
         stream_manager = stream.ui
         if not settings_app:

@@ -45,7 +45,7 @@ def get_robot_ip() -> str:
     from pathlib import Path
 
     # Check config file
-    config_path = Path("~/.kayacan/config.env").expanduser()
+    config_path = Path("~/.reachy-brain/config.env").expanduser()
     if config_path.exists():
         for line in config_path.read_text().splitlines():
             if line.startswith("ROBOT_IP="):

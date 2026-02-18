@@ -9,7 +9,7 @@ Usage:
 
 Environment:
     TELEGRAM_BOT_TOKEN: Bot token from BotFather
-    TELEGRAM_CHAT_ID: Chat ID to send to (default: REDACTED_CHAT_ID)
+    TELEGRAM_CHAT_ID: Chat ID to send to (required)
     RELAY_PORT: Server port (default: 18800)
 """
 import os
@@ -23,7 +23,7 @@ app = FastAPI(title="Reachy Telegram Relay")
 
 # Config
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "REDACTED_CHAT_ID")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 RELAY_PORT = int(os.getenv("RELAY_PORT", "18800"))
 
 
@@ -85,6 +85,75 @@ async def post_telegram(msg: Message):
 
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+
+class SpotifyQuery(BaseModel):
+    query: str
+    type: str = "track"
+
+
+class SpotifyAction(BaseModel):
+    action: str
+    value: int | None = None
+
+
+async def _run_spotify(*args: str) -> str:
+    """Run spotify_player CLI on Mac."""
+    cmd = ["/opt/homebrew/bin/spotify_player", *args]
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10)
+        output = stdout.decode().strip()
+        if proc.returncode != 0:
+            err = stderr.decode().strip()
+            return f"Error: {err or output}"
+        return output
+    except Exception as e:
+        return f"Error: {e}"
+
+
+@app.post("/spotify/play")
+async def spotify_play(req: SpotifyQuery):
+    """Search and play on Spotify."""
+    output = await _run_spotify("playback", "start", "--name", req.query, "--type", req.type)
+    if output.startswith("Error"):
+        return {"error": output}
+    return {"status": "playing", "query": req.query, "type": req.type}
+
+
+@app.post("/spotify/control")
+async def spotify_control(req: SpotifyAction):
+    """Control Spotify playback."""
+    if req.action == "next":
+        output = await _run_spotify("playback", "next")
+    elif req.action == "previous":
+        output = await _run_spotify("playback", "previous")
+    elif req.action == "play":
+        output = await _run_spotify("playback", "play-pause")
+    elif req.action == "pause":
+        output = await _run_spotify("playback", "play-pause")
+    elif req.action == "shuffle":
+        output = await _run_spotify("playback", "shuffle")
+    elif req.action == "volume" and req.value is not None:
+        output = await _run_spotify("playback", "volume", str(req.value))
+    else:
+        return {"error": f"Unknown action: {req.action}"}
+    if output.startswith("Error"):
+        return {"error": output}
+    return {"status": "ok", "action": req.action}
+
+
+@app.get("/spotify/status")
+async def spotify_status():
+    """Get current playback."""
+    output = await _run_spotify("playback")
+    if output.startswith("Error"):
+        return {"error": output}
+    return {"status": "ok", "now_playing": output}
 
 
 def main():

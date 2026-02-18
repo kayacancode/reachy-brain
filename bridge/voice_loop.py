@@ -5,7 +5,7 @@ Voice Loop — Cooper's Push Architecture
 
 Runs on macOS. HTTP server that receives speech from Reachy bridge, then:
   1. Transcribe with OpenAI Whisper API
-  2. Send to KayaCan via OpenClaw chat completions API
+  2. Send to AI via OpenClaw chat completions API
   3. Generate speech with OpenAI TTS
   4. POST wav back to Reachy bridge /play
 
@@ -81,7 +81,7 @@ def transcribe_audio(wav_bytes):
         return ""
 
 def get_ai_response(text):
-    """Get response from KayaCan via OpenClaw chat completions."""
+    """Get response via OpenClaw chat completions."""
     try:
         resp = requests.post(
             f"{OPENCLAW_API}/v1/chat/completions",
@@ -95,7 +95,7 @@ def get_ai_response(text):
                     {
                         "role": "system",
                         "content": (
-                            "You are KayaCan speaking through a Reachy Mini robot. "
+                            f"You are {os.environ.get('AGENT_NAME', 'Reachy')} speaking through a Reachy Mini robot. "
                             "Keep responses SHORT — 1-2 sentences max. "
                             "Be natural, conversational, warm. "
                             "You're physically present in the room talking to someone. "

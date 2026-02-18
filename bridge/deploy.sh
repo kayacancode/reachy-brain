@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # Load config if exists
-CONFIG_FILE="$HOME/.kayacan/config.env"
+CONFIG_FILE="$HOME/.reachy-brain/config.env"
 [ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE"
 
 REACHY_HOST="${ROBOT_IP:-10.0.0.68}"

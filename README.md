@@ -1,4 +1,4 @@
-# KayaCan - Reachy Mini with Claude Brain
+# Reachy Brain - Reachy Mini with Claude Brain
 
 Give your [Reachy Mini](https://www.pollen-robotics.com/reachy-mini/) robot a brain powered by Claude. Talk directly to the robot - no browser needed.
 
@@ -163,4 +163,4 @@ MIT
 
 ## Credits
 
-Built with Claude by KayaCan
+Built with Claude + OpenClaw

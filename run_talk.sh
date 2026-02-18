@@ -9,9 +9,9 @@
 #   ENABLE_FACE_RECOGNITION=false ./run_talk.sh
 
 # Load and export environment variables from config
-if [ -f ~/.kayacan/config.env ]; then
+if [ -f ~/.reachy-brain/config.env ]; then
     set -a  # auto-export all variables
-    source ~/.kayacan/config.env
+    source ~/.reachy-brain/config.env
     set +a
 fi
 

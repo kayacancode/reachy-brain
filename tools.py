@@ -1,11 +1,15 @@
 """Robot control tools for direct talk mode.
 
 Simplified tool definitions that use HTTP API to control the robot.
+Includes Spotify playback control via spotify_player CLI.
 """
 
+import asyncio
 import base64
 import json
 import logging
+import os
+import subprocess
 from typing import Any
 
 import httpx
@@ -193,6 +197,57 @@ TOOL_DEFINITIONS = [
 ]
 
 
+# Spotify tool definitions
+SPOTIFY_TOOL_DEFINITIONS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "spotify_play",
+            "description": "Play a song, artist, album, or playlist on Spotify. Use when user asks to play music.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Song name, artist, album, or playlist to play"},
+                    "type": {"type": "string", "enum": ["track", "artist", "album", "playlist"], "description": "What to search for (default: track)"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "spotify_control",
+            "description": "Control Spotify playback: skip, previous, pause, resume, shuffle, volume.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["next", "previous", "play", "pause", "shuffle", "volume"],
+                        "description": "Playback action",
+                    },
+                    "value": {"type": "integer", "description": "Volume level 0-100 (only for volume action)"},
+                },
+                "required": ["action"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "spotify_status",
+            "description": "Get current Spotify playback status (what's playing now).",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+]
+
+
 class ToolExecutor:
     """Executes robot control tools via HTTP API."""
 
@@ -257,6 +312,18 @@ class ToolExecutor:
                 return await self._recall(arguments.get("question", ""))
             elif tool_name == "remember":
                 return await self._remember(arguments.get("fact", ""))
+            elif tool_name == "spotify_play":
+                return await self._spotify_play(
+                    arguments.get("query", ""),
+                    arguments.get("type", "track"),
+                )
+            elif tool_name == "spotify_control":
+                return await self._spotify_control(
+                    arguments.get("action", "next"),
+                    arguments.get("value"),
+                )
+            elif tool_name == "spotify_status":
+                return await self._spotify_status()
             else:
                 return {"error": f"Unknown tool: {tool_name}"}
         except Exception as e:
@@ -363,6 +430,48 @@ class ToolExecutor:
         except Exception as e:
             return {"error": f"Camera request failed: {e}"}
 
+    async def _spotify_play(self, query: str, search_type: str = "track") -> dict:
+        """Search and play something on Spotify via Mac relay."""
+        try:
+            relay_url = os.getenv("TELEGRAM_RELAY", "").replace("/telegram", "")
+            if not relay_url:
+                relay_url = f"http://{os.getenv('MAC_IP', '10.4.33.158')}:18801"
+            response = await self._client.post(
+                f"{relay_url}/spotify/play",
+                json={"query": query, "type": search_type},
+            )
+            return response.json()
+        except Exception as e:
+            return {"error": f"Spotify play failed: {e}"}
+
+    async def _spotify_control(self, action: str, value: int = None) -> dict:
+        """Control Spotify playback via Mac relay."""
+        try:
+            relay_url = os.getenv("TELEGRAM_RELAY", "").replace("/telegram", "")
+            if not relay_url:
+                relay_url = f"http://{os.getenv('MAC_IP', '10.4.33.158')}:18801"
+            payload = {"action": action}
+            if value is not None:
+                payload["value"] = value
+            response = await self._client.post(
+                f"{relay_url}/spotify/control",
+                json=payload,
+            )
+            return response.json()
+        except Exception as e:
+            return {"error": f"Spotify control failed: {e}"}
+
+    async def _spotify_status(self) -> dict:
+        """Get current playback status via Mac relay."""
+        try:
+            relay_url = os.getenv("TELEGRAM_RELAY", "").replace("/telegram", "")
+            if not relay_url:
+                relay_url = f"http://{os.getenv('MAC_IP', '10.4.33.158')}:18801"
+            response = await self._client.get(f"{relay_url}/spotify/status")
+            return response.json()
+        except Exception as e:
+            return {"error": f"Spotify status failed: {e}"}
+
     async def _recall(self, question: str) -> dict:
         """Recall information from memory."""
         if not self.memory:
@@ -384,7 +493,7 @@ class ToolExecutor:
 
 def get_tool_definitions() -> list[dict]:
     """Return the tool definitions for Claude."""
-    return TOOL_DEFINITIONS
+    return TOOL_DEFINITIONS + SPOTIFY_TOOL_DEFINITIONS
 
 
 def parse_tool_calls(response: dict) -> list[tuple[str, dict]]:

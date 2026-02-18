@@ -5,7 +5,7 @@
 set -e
 
 # Load config if exists
-CONFIG_FILE="$HOME/.kayacan/config.env"
+CONFIG_FILE="$HOME/.reachy-brain/config.env"
 [ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE"
 
 # Get robot IP from arg or config
@@ -59,14 +59,14 @@ echo "   Talk mode files deployed to ~/"
 # Deploy config
 echo ""
 echo "4. Deploying config..."
-sshpass -p "$ROBOT_PASS" ssh -o StrictHostKeyChecking=no "$ROBOT_USER@$ROBOT_IP" "mkdir -p ~/.kayacan"
+sshpass -p "$ROBOT_PASS" ssh -o StrictHostKeyChecking=no "$ROBOT_USER@$ROBOT_IP" "mkdir -p ~/.reachy-brain"
 if [ -f "$CONFIG_FILE" ]; then
     sshpass -p "$ROBOT_PASS" scp -o StrictHostKeyChecking=no \
         "$CONFIG_FILE" \
-        "$ROBOT_USER@$ROBOT_IP:~/.kayacan/config.env"
+        "$ROBOT_USER@$ROBOT_IP:~/.reachy-brain/config.env"
     # Override ROBOT_IP to localhost on the robot (it runs locally)
     sshpass -p "$ROBOT_PASS" ssh -o StrictHostKeyChecking=no "$ROBOT_USER@$ROBOT_IP" \
-        "sed -i 's/^ROBOT_IP=.*/ROBOT_IP=\"127.0.0.1\"/' ~/.kayacan/config.env"
+        "sed -i 's/^ROBOT_IP=.*/ROBOT_IP=\"127.0.0.1\"/' ~/.reachy-brain/config.env"
     echo "   Config deployed (ROBOT_IP set to 127.0.0.1 for local operation)"
 else
     echo "   No config file found at $CONFIG_FILE - skipping"

@@ -10,7 +10,7 @@ MAC_IP="${MAC_IP:-10.4.33.158}"
 RELAY_PORT="18801"
 SKILL_DIR="$(cd "$(dirname "$0")" && pwd)"
 RELAY_PID_FILE="/tmp/reachy_relay.pid"
-BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-REDACTED_TELEGRAM_BOT_TOKEN}"
+BOT_TOKEN="${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN not set}"
 
 ssh_cmd() {
     sshpass -p "$ROBOT_PASS" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 "$ROBOT_USER@$ROBOT_IP" "$@"
@@ -77,7 +77,7 @@ start_demo() {
 
     # 5. Start talk_wireless on robot
     echo "5/6 Starting voice agent on robot..."
-    ssh_cmd "cd /home/pollen && source ~/.kayacan/config.env && export TELEGRAM_RELAY='http://$MAC_IP:$RELAY_PORT/telegram' && nohup python3 talk_wireless.py > ~/talk.log 2>&1 &" 2>/dev/null || true
+    ssh_cmd "cd /home/pollen && source ~/.reachy-brain/config.env && export TELEGRAM_RELAY='http://$MAC_IP:$RELAY_PORT/telegram' && nohup python3 talk_wireless.py > ~/talk.log 2>&1 &" 2>/dev/null || true
     sleep 3
     if ssh_cmd "pgrep -f talk_wireless.py" >/dev/null 2>&1; then
         echo "  ✅ Voice agent running"

@@ -3,7 +3,7 @@
 # Usage: ./wake.sh [IP]
 
 # Load config if exists
-CONFIG_FILE="$HOME/.kayacan/config.env"
+CONFIG_FILE="$HOME/.reachy-brain/config.env"
 [ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE"
 
 IP="${1:-${ROBOT_IP:-192.168.23.66}}"
