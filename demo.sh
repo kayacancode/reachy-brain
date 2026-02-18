@@ -3,10 +3,10 @@
 # Usage: ./demo.sh start | stop | status
 set -euo pipefail
 
-ROBOT_IP="10.0.0.68"
+ROBOT_IP="${REACHY_IP:-10.4.33.197}"
 ROBOT_USER="pollen"
 ROBOT_PASS="root"
-MAC_IP="10.0.0.234"
+MAC_IP="${MAC_IP:-10.4.33.158}"
 RELAY_PORT="18801"
 SKILL_DIR="$(cd "$(dirname "$0")" && pwd)"
 RELAY_PID_FILE="/tmp/reachy_relay.pid"
