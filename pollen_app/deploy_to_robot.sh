@@ -67,7 +67,7 @@ echo "📦 Updating .env..."
 
 # Set defaults if not in config
 : "${CLAWDBOT_ENDPOINT:=http://10.0.0.234:18789/v1/chat/completions}"
-: "${CLAWDBOT_TOKEN:=REDACTED_CLAWDBOT_TOKEN}"
+: "${CLAWDBOT_TOKEN:?CLAWDBOT_TOKEN not set - add to .env}"
 : "${CLAWDBOT_MODEL:=claude-sonnet-4-20250514}"
 : "${ELEVENLABS_API_KEY:?ELEVENLABS_API_KEY not set}"
 : "${ELEVENLABS_VOICE_ID:=REDACTED_VOICE_ID}"
