@@ -5,7 +5,7 @@ description: Control Reachy Mini robot via REST API. Use when moving the robot's
 
 # Reachy Mini Control
 
-Control Reachy Mini robot at `http://10.0.0.68:8000` (daemon) and `http://10.0.0.68:9000` (bridge).
+Control Reachy Mini robot at `http://reachy-mini.local:8000` (daemon) and `http://reachy-mini.local:9000` (bridge).
 Also reachable via `reachy.local`.
 
 **Full embodiment**: voice, vision, expressions, animations, and persistent memory.
@@ -91,7 +91,7 @@ Deploy the bridge (only needed once, or after updates):
 
 Check if bridge is running:
 ```bash
-curl -s http://10.0.0.68:9000/status
+curl -s http://reachy-mini.local:9000/status
 ```
 
 ## Quick Reference
@@ -102,13 +102,13 @@ curl -s http://10.0.0.68:9000/status
 say -o /tmp/reachy_say.wav --data-format=LEI16@44100 "Hello!"
 
 # 2. Play through bridge
-curl -s -X POST http://10.0.0.68:9000/play --data-binary @/tmp/reachy_say.wav
+curl -s -X POST http://reachy-mini.local:9000/play --data-binary @/tmp/reachy_say.wav
 ```
 
 ### Listen (Record from Reachy Mic)
 ```bash
 # Record 5 seconds (default), returns wav file
-curl -s http://10.0.0.68:9000/listen?duration=5 -o /tmp/heard.wav
+curl -s http://reachy-mini.local:9000/listen?duration=5 -o /tmp/heard.wav
 
 # Then transcribe locally
 whisper /tmp/heard.wav --model tiny --language en --output_format txt --output_dir /tmp
@@ -116,49 +116,49 @@ whisper /tmp/heard.wav --model tiny --language en --output_format txt --output_d
 
 ### Custom Animations (via Bridge)
 ```bash
-curl -s -X POST http://10.0.0.68:9000/animate/look      # Curious looking around
-curl -s -X POST http://10.0.0.68:9000/animate/nod       # Enthusiastic nodding
-curl -s -X POST http://10.0.0.68:9000/animate/wiggle    # Excited side-to-side
-curl -s -X POST http://10.0.0.68:9000/animate/think     # Thoughtful head tilt
-curl -s -X POST http://10.0.0.68:9000/animate/surprise  # Surprised reaction
-curl -s -X POST http://10.0.0.68:9000/animate/happy     # Happy bouncing
-curl -s -X POST http://10.0.0.68:9000/animate/wave      # Antenna wave greeting
-curl -s -X POST http://10.0.0.68:9000/animate/listen    # Attentive pose
-curl -s -X POST http://10.0.0.68:9000/animate/alert     # Alert/attention
-curl -s -X POST http://10.0.0.68:9000/animate/sad       # Sad expression
-curl -s -X POST http://10.0.0.68:9000/animate/reset     # Return to neutral
+curl -s -X POST http://reachy-mini.local:9000/animate/look      # Curious looking around
+curl -s -X POST http://reachy-mini.local:9000/animate/nod       # Enthusiastic nodding
+curl -s -X POST http://reachy-mini.local:9000/animate/wiggle    # Excited side-to-side
+curl -s -X POST http://reachy-mini.local:9000/animate/think     # Thoughtful head tilt
+curl -s -X POST http://reachy-mini.local:9000/animate/surprise  # Surprised reaction
+curl -s -X POST http://reachy-mini.local:9000/animate/happy     # Happy bouncing
+curl -s -X POST http://reachy-mini.local:9000/animate/wave      # Antenna wave greeting
+curl -s -X POST http://reachy-mini.local:9000/animate/listen    # Attentive pose
+curl -s -X POST http://reachy-mini.local:9000/animate/alert     # Alert/attention
+curl -s -X POST http://reachy-mini.local:9000/animate/sad       # Sad expression
+curl -s -X POST http://reachy-mini.local:9000/animate/reset     # Return to neutral
 
 # List all custom animations
-curl -s -X POST http://10.0.0.68:9000/animations
+curl -s -X POST http://reachy-mini.local:9000/animations
 ```
 
 ### Emotions (Pre-recorded)
 ```bash
-curl -s -X POST http://10.0.0.68:9000/emotion/cheerful1
-curl -s -X POST http://10.0.0.68:9000/emotion/welcoming1
-curl -s -X POST http://10.0.0.68:9000/emotion/thinking1
+curl -s -X POST http://reachy-mini.local:9000/emotion/cheerful1
+curl -s -X POST http://reachy-mini.local:9000/emotion/welcoming1
+curl -s -X POST http://reachy-mini.local:9000/emotion/thinking1
 ```
 
 Available emotions: cheerful1, happy, sad1, sad2, surprised1, surprised2, fear1, scared1, rage1, furious1, contempt1, disgusted1, frustrated1, irritated1, irritated2, impatient1, impatient2, curious1, thoughtful1, thoughtful2, confused1, uncertain1, shy1, lonely1, tired1, exhausted1, boredom1, boredom2, anxiety1, proud1, proud2, proud3, grateful1, loving1, welcoming1, welcoming2, helpful1, helpful2, understanding1, understanding2, calming1, serenity1, relief1, relief2, success1, success2, amazed1, enthusiastic1, enthusiastic2, electric1, attentive1, attentive2, inquiring1, inquiring2, inquiring3, indifferent1, resigned1, uncomfortable1, downcast1, lost1, incomprehensible2, laughing1, laughing2, dying1, oops1, oops2, reprimand1, reprimand2, reprimand3, displeased1, displeased2, go_away1, come1, no1, no_excited1, no_sad1, yes1, yes_sad1, sleep1, dance1, dance2, dance3
 
 ### Dances
 ```bash
-curl -s -X POST http://10.0.0.68:9000/dance/jackson_square
-curl -s -X POST http://10.0.0.68:9000/dance/groovy_sway_and_roll
+curl -s -X POST http://reachy-mini.local:9000/dance/jackson_square
+curl -s -X POST http://reachy-mini.local:9000/dance/groovy_sway_and_roll
 ```
 
 Available dances: side_glance_flick, jackson_square, side_peekaboo, groovy_sway_and_roll, chin_lead, side_to_side_sway, neck_recoil, head_tilt_roll, simple_nod, uh_huh_tilt, interwoven_spirals, pendulum_swing, chicken_peck, yeah_nod, stumble_and_recover, dizzy_spin, grid_snap, polyrhythm_combo, sharp_side_tilt
 
 ### Wake / Sleep / Stop
 ```bash
-curl -s -X POST http://10.0.0.68:9000/wake
-curl -s -X POST http://10.0.0.68:9000/sleep
-curl -s -X POST http://10.0.0.68:9000/stop
+curl -s -X POST http://reachy-mini.local:9000/wake
+curl -s -X POST http://reachy-mini.local:9000/sleep
+curl -s -X POST http://reachy-mini.local:9000/stop
 ```
 
 ### Move Head / Antennas (via bridge → daemon)
 ```bash
-curl -s -X POST http://10.0.0.68:9000/goto \
+curl -s -X POST http://reachy-mini.local:9000/goto \
   -H "Content-Type: application/json" \
   -d '{"head_pose": {"pitch": 10, "yaw": 15}, "antennas": [30, 30], "duration": 1.0}'
 ```
@@ -167,31 +167,31 @@ curl -s -X POST http://10.0.0.68:9000/goto \
 If the bridge is down, use the daemon directly:
 ```bash
 # Status
-curl -s http://10.0.0.68:8000/api/daemon/status
+curl -s http://reachy-mini.local:8000/api/daemon/status
 
 # Start daemon
-curl -s -X POST "http://10.0.0.68:8000/api/daemon/start?wake_up=true"
+curl -s -X POST "http://reachy-mini.local:8000/api/daemon/start?wake_up=true"
 
 # Stop daemon
-curl -s -X POST "http://10.0.0.68:8000/api/daemon/stop?goto_sleep=true"
+curl -s -X POST "http://reachy-mini.local:8000/api/daemon/stop?goto_sleep=true"
 
 # Volume
-curl -s http://10.0.0.68:8000/api/volume/current
-curl -s -X POST http://10.0.0.68:8000/api/volume/set -H "Content-Type: application/json" -d '{"volume": 75}'
+curl -s http://reachy-mini.local:8000/api/volume/current
+curl -s -X POST http://reachy-mini.local:8000/api/volume/set -H "Content-Type: application/json" -d '{"volume": 75}'
 
 # Emotions/dances (direct)
-curl -s -X POST http://10.0.0.68:8000/api/move/play/recorded-move-dataset/pollen-robotics/reachy-mini-emotions-library/{emotion}
-curl -s -X POST http://10.0.0.68:8000/api/move/play/recorded-move-dataset/pollen-robotics/reachy-mini-dances-library/{dance}
+curl -s -X POST http://reachy-mini.local:8000/api/move/play/recorded-move-dataset/pollen-robotics/reachy-mini-emotions-library/{emotion}
+curl -s -X POST http://reachy-mini.local:8000/api/move/play/recorded-move-dataset/pollen-robotics/reachy-mini-dances-library/{dance}
 ```
 
 ## SSH Access
 ```bash
-sshpass -p "root" ssh pollen@10.0.0.68
+sshpass -p "root" ssh pollen@reachy-mini.local
 ```
 
 ## Bridge Logs
 ```bash
-sshpass -p "root" ssh pollen@10.0.0.68 'cat /tmp/bridge.log'
+sshpass -p "root" ssh pollen@reachy-mini.local 'cat /tmp/bridge.log'
 ```
 
 ## Custom Animations (Expressive Movements)

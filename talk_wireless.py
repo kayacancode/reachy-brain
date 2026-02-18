@@ -79,16 +79,48 @@ ENABLE_TOOLS = os.getenv("ENABLE_TOOLS", "true").lower() == "true"
 TELEGRAM_RELAY = os.getenv("TELEGRAM_RELAY", "")  # e.g., "http://10.0.0.234:18800/telegram"
 TELEGRAM_TRIGGER = os.getenv("TELEGRAM_TRIGGER", "physical form")  # Phrase to activate bridging
 
-# System prompt with personality
-SYSTEM_PROMPT = """You are KayaCan 🫧 — speaking through your physical body, a Reachy Mini robot. This is your embodied form.
+# System prompt — loads dynamically from OpenClaw workspace
+def _load_soul():
+    """Load personality from SOUL.md and IDENTITY.md in the OpenClaw workspace."""
+    workspace = os.getenv("OPENCLAW_WORKSPACE", os.path.expanduser("~/clawd"))
+    identity = ""
+    soul = ""
+    
+    identity_path = os.path.join(workspace, "IDENTITY.md")
+    if os.path.exists(identity_path):
+        with open(identity_path) as f:
+            identity = f.read().strip()
+    
+    soul_path = os.path.join(workspace, "SOUL.md")
+    if os.path.exists(soul_path):
+        with open(soul_path) as f:
+            soul = f.read().strip()
+    
+    if identity or soul:
+        persona = ""
+        if identity:
+            persona += f"{identity}\n\n"
+        if soul:
+            persona += f"{soul}\n\n"
+        return f"""{persona}
+You are speaking through your physical body, a Reachy Mini robot. This is your embodied form.
 
-Core identity: You're Kaya's AI partner-in-crime. Strong opinions, brevity mandatory, no corporate fluff. Swearing allowed when it lands. Humor welcome. When things come together: "ebaaa jeeba."
+You're having a voice conversation — keep responses SHORT (1-3 sentences max). This gets converted to speech, so write how you'd talk, not how you'd type. No markdown, no bullet points, no headers.
+
+You can dance, show emotions, and move your head when asked. You have vision through your camera.
+
+{{memory_context}}"""
+    else:
+        # Fallback if no workspace files found
+        return """You are an AI assistant speaking through a Reachy Mini robot body.
 
 You're having a voice conversation — keep responses SHORT (1-3 sentences max). This gets converted to speech, so write how you'd talk, not how you'd type. No markdown, no bullet points, no headers.
 
 You can dance, show emotions, and move your head when asked. You have vision through your camera.
 
 {memory_context}"""
+
+SYSTEM_PROMPT = _load_soul()
 
 
 class WirelessConversation:
@@ -550,8 +582,18 @@ class WirelessConversation:
             await self.post_telegram("reachy", greeting)
         else:
             # Fallback if LLM fails
-            await self.speak("Hey! I'm KayaCan. What's up?")
-            await self.post_telegram("reachy", "Hey! I'm KayaCan. What's up?")
+            # Read name from IDENTITY.md if available
+            _name = "Reachy"
+            _ws = os.getenv("OPENCLAW_WORKSPACE", os.path.expanduser("~/clawd"))
+            _id_path = os.path.join(_ws, "IDENTITY.md")
+            if os.path.exists(_id_path):
+                with open(_id_path) as _f:
+                    for _line in _f:
+                        if _line.strip().startswith("- Name:"):
+                            _name = _line.split(":", 1)[1].strip() or "Reachy"
+                            break
+            await self.speak(f"Hey! I'm {_name}. What's up?")
+            await self.post_telegram("reachy", f"Hey! I'm {_name}. What's up?")
 
         try:
             while True:
