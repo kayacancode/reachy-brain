@@ -97,12 +97,11 @@ class SpotifyAction(BaseModel):
     value: int | None = None
 
 
-async def _run_spotify(*args: str) -> str:
-    """Run spotify_player CLI on Mac."""
-    cmd = ["/opt/homebrew/bin/spotify_player", *args]
+async def _run_osascript(script: str) -> str:
+    """Run AppleScript on Mac."""
     try:
         proc = await asyncio.create_subprocess_exec(
-            *cmd,
+            "osascript", "-e", script,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -118,28 +117,37 @@ async def _run_spotify(*args: str) -> str:
 
 @app.post("/spotify/play")
 async def spotify_play(req: SpotifyQuery):
-    """Search and play on Spotify."""
-    output = await _run_spotify("playback", "start", "--name", req.query, "--type", req.type)
+    """Search and play on Spotify via URI or search."""
+    # Use Spotify's search URI to play by name
+    search_type = req.type or "track"
+    query = req.query.replace('"', '\\"')
+    # Open Spotify search URI — this triggers playback of the top result
+    script = f'tell application "Spotify" to play track "spotify:search:{query}"'
+    output = await _run_osascript(script)
     if output.startswith("Error"):
-        return {"error": output}
-    return {"status": "playing", "query": req.query, "type": req.type}
+        # Fallback: just open the search in Spotify
+        script2 = f'open location "spotify:search:{query}"'
+        await _run_osascript(script2)
+        return {"status": "searching", "query": req.query, "note": "Opened search in Spotify"}
+    return {"status": "playing", "query": req.query, "type": search_type}
 
 
 @app.post("/spotify/control")
 async def spotify_control(req: SpotifyAction):
-    """Control Spotify playback."""
+    """Control Spotify playback via AppleScript."""
+    spotify = 'tell application "Spotify" to '
     if req.action == "next":
-        output = await _run_spotify("playback", "next")
+        output = await _run_osascript(f'{spotify}next track')
     elif req.action == "previous":
-        output = await _run_spotify("playback", "previous")
+        output = await _run_osascript(f'{spotify}previous track')
     elif req.action == "play":
-        output = await _run_spotify("playback", "play-pause")
+        output = await _run_osascript(f'{spotify}play')
     elif req.action == "pause":
-        output = await _run_spotify("playback", "play-pause")
+        output = await _run_osascript(f'{spotify}pause')
     elif req.action == "shuffle":
-        output = await _run_spotify("playback", "shuffle")
+        output = await _run_osascript(f'{spotify}set shuffling to (not shuffling)')
     elif req.action == "volume" and req.value is not None:
-        output = await _run_spotify("playback", "volume", str(req.value))
+        output = await _run_osascript(f'{spotify}set sound volume to {req.value}')
     else:
         return {"error": f"Unknown action: {req.action}"}
     if output.startswith("Error"):
@@ -149,11 +157,48 @@ async def spotify_control(req: SpotifyAction):
 
 @app.get("/spotify/status")
 async def spotify_status():
-    """Get current playback."""
-    output = await _run_spotify("playback")
+    """Get current playback via AppleScript."""
+    script = '''
+    tell application "Spotify"
+        if player state is playing then
+            set t to name of current track
+            set a to artist of current track
+            set alb to album of current track
+            set pos to player position
+            set dur to duration of current track
+            return "Playing: " & t & " by " & a & " from " & alb & " (" & (round (pos)) & "s / " & (round (dur / 1000)) & "s)"
+        else if player state is paused then
+            set t to name of current track
+            set a to artist of current track
+            return "Paused: " & t & " by " & a
+        else
+            return "Stopped"
+        end if
+    end tell
+    '''
+    output = await _run_osascript(script)
     if output.startswith("Error"):
         return {"error": output}
     return {"status": "ok", "now_playing": output}
+
+
+OPENCLAW_TOKEN = os.getenv("OPENCLAW_TOKEN", "")
+OPENCLAW_URL = os.getenv("OPENCLAW_URL", "http://127.0.0.1:18789")
+
+
+@app.post("/v1/chat/completions")
+async def proxy_chat_completions(request: dict):
+    """Proxy OpenAI-compatible chat completions to local OpenClaw."""
+    async with httpx.AsyncClient(timeout=120) as client:
+        headers = {"Content-Type": "application/json"}
+        if OPENCLAW_TOKEN:
+            headers["Authorization"] = f"Bearer {OPENCLAW_TOKEN}"
+        resp = await client.post(
+            f"{OPENCLAW_URL}/v1/chat/completions",
+            json=request,
+            headers=headers,
+        )
+        return resp.json()
 
 
 def main():

@@ -1,166 +1,172 @@
-# Reachy Brain - Reachy Mini with Claude Brain
+# Reachy Brain 🤖🧠
 
-Give your [Reachy Mini](https://www.pollen-robotics.com/reachy-mini/) robot a brain powered by Claude. Talk directly to the robot - no browser needed.
+Give your [Reachy Mini](https://www.pollen-robotics.com/reachy-mini/) a brain powered by [OpenClaw](https://github.com/openclaw/openclaw). Talk to the robot, control Spotify, trigger animations — all by voice.
+
+## What Can It Do?
+
+- **🎤 Voice Conversations** — Talk naturally, powered by Claude via OpenClaw
+- **🧠 Persistent Memory** — Remembers you across sessions via [Honcho](https://honcho.dev)
+- **🎵 Spotify Control** — "Play some jazz", "skip this song", "what's playing?" — all by voice
+- **🎭 Expressive Animations** — 80+ emotions (welcoming, curious, cheerful, dance, etc.)
+- **👁️ Face Recognition** — Recognizes and greets known people (optional)
+- **📱 Telegram Bridge** — Conversations are relayed to Telegram for logging
+- **🔧 Tool Execution** — Extensible tools the AI can call during conversation
+- **🗣️ Dynamic Personality** — Loads personality from workspace files (`SOUL.md`, `IDENTITY.md`)
+
+## Architecture
+
+```
+┌─────────────┐     ┌──────────────┐     ┌──────────────┐
+│  Reachy Mini │────▶│  Mac Relay   │────▶│   OpenClaw   │
+│  (Robot)     │◀────│  Server      │◀────│   Gateway    │
+└─────────────┘     └──────────────┘     └──────────────┘
+                           │
+                    ┌──────┴──────┐
+                    │             │
+              ┌─────▼────┐ ┌─────▼─────┐
+              │ Spotify   │ │ Telegram  │
+              │(AppleScript)│ │  Bot API  │
+              └──────────┘ └───────────┘
+
+Robot Pipeline:
+  Mic → VAD → STT (Nemotron/Whisper) → Claude (OpenClaw) → ElevenLabs TTS → Speaker
+                                            ↕
+                                     Honcho Memory
+```
 
 ## Quick Start
 
-### 1. Start OpenClaw on your Mac
+### Prerequisites
+
+- [OpenClaw](https://github.com/openclaw/openclaw) running on your Mac
+- Reachy Mini on the same network
+- API keys: Anthropic (via OpenClaw), ElevenLabs, and optionally OpenAI for STT
+
+### 1. Configure
 
 ```bash
-openclaw gateway
+cp .env.example ~/.reachy-brain/.env
+# Edit with your API keys
 ```
 
-### 2. Deploy and run on the robot
+### 2. Enable OpenClaw Chat Completions
+
+The robot talks to OpenClaw via the OpenAI-compatible API endpoint:
 
 ```bash
-# Deploy the talk script
-sshpass -p 'root' scp talk_wireless.py run_talk.sh pollen@ROBOT_IP:/home/pollen/
-
-# SSH in and run
-ssh pollen@ROBOT_IP './run_talk.sh'
+# In OpenClaw config, enable:
+# gateway.http.endpoints.chatCompletions.enabled: true
 ```
 
-### 3. Talk to Reachy!
+### 3. Start the Relay Server (Mac)
 
-The robot will say "Hey! I'm ready to chat." - just start talking.
-
-```
-🎤 Listening...
-  RMS: 0.051 [█████               ] 🎙️ speech (1)
-  RMS: 0.165 [████████████████    ] 🎙️ speech (2)
-  RMS: 0.005 [                    ] ... silence (1/2)
-  RMS: 0.003 [                    ] ... silence (2/2)
-📝 Processing...
-You: Hello, how are you?
-Reachy: Hey! I'm doing great, thanks for asking!
-🔊 Playing audio...
-🎤 Listening...
-```
-
-## How It Works
-
-```
-┌─────────────────┐
-│  Robot Mic      │──▶ arecord (stereo 16kHz)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  VAD Detection  │──▶ RMS energy threshold
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Whisper STT    │──▶ OpenAI API
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Claude Brain   │──▶ OpenClaw (Clawdbot)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  ElevenLabs TTS │──▶ MP3 audio
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Robot Speaker  │──▶ ffmpeg + aplay
-└─────────────────┘
-```
-
-## Requirements
-
-### On your Mac
-- **OpenClaw** - Claude gateway (`npm install -g openclaw`)
-- **sshpass** - For easy SSH (`brew install hudochenkov/sshpass/sshpass`)
-
-### API Keys
-- **OpenAI** - For Whisper STT
-- **ElevenLabs** - For TTS voice
-- **Anthropic** (via OpenClaw) - For Claude brain
-
-## Configuration
-
-Edit `run_talk.sh` on the robot with your keys:
+The relay proxies LLM calls, Spotify control, and Telegram messages:
 
 ```bash
-export OPENAI_API_KEY="sk-..."
-export CLAWDBOT_ENDPOINT="http://YOUR_MAC_IP:18789/v1/chat/completions"
-export CLAWDBOT_TOKEN="your-openclaw-token"
-export ELEVENLABS_API_KEY="sk_..."
-export ELEVENLABS_VOICE_ID="REDACTED_VOICE_ID"
+RELAY_PORT=18801 OPENCLAW_TOKEN="your-token" python3 relay_server.py
 ```
 
-## Quick Commands
+### 4. Boot the Robot
 
 ```bash
-# Wake up Reachy
-./wake.sh
+# Wake the daemon
+curl -X POST "http://reachy-mini.local:8000/api/daemon/start?wake_up=true"
 
-# Put Reachy to sleep
-./sleep.sh
+# Start the audio bridge
+ssh pollen@reachy-mini.local 'nohup python3 ~/simple_bridge.py > ~/bridge.log 2>&1 &'
 
-# With custom IP
-./wake.sh  [ip]
-./sleep.sh [ip]
+# Start the voice agent
+ssh pollen@reachy-mini.local 'source ~/.kayacan/config.env && \
+  export OPENCLAW_WORKSPACE=~/clawd && \
+  export TELEGRAM_RELAY=http://YOUR_MAC_IP:18801/telegram && \
+  nohup python3 talk_wireless.py > ~/talk.log 2>&1 &'
+```
+
+Reachy will play a welcoming animation and greet you by voice. Start talking!
+
+## Spotify Control
+
+Spotify is controlled via AppleScript on your Mac — **no Spotify API keys needed**. Just have Spotify open and playing.
+
+Voice commands:
+- "Play some Drake"
+- "Skip this song" / "Next track"
+- "What's playing right now?"
+- "Pause the music"
+- "Set volume to 50"
+
+The relay server exposes these endpoints:
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/spotify/play` | POST | Search and play (`{"query": "...", "type": "track"}`) |
+| `/spotify/control` | POST | Playback control (`{"action": "next\|previous\|play\|pause\|shuffle\|volume"}`) |
+| `/spotify/status` | GET | Current playback info |
+
+## Animations
+
+Reachy has 80+ expressive animations via the daemon API:
+
+```bash
+# Play an emotion
+curl -X POST "http://reachy-mini.local:8000/api/move/play/recorded-move-dataset/pollen-robotics/reachy-mini-emotions-library/cheerful1"
+
+# Available emotions include:
+# welcoming, curious, cheerful, laughing, enthusiastic, dance,
+# thoughtful, shy, proud, grateful, amazed, confused, sad, and many more
 ```
 
 ## Files
 
 | File | Description |
 |------|-------------|
-| `talk_wireless.py` | Main conversation loop (runs on robot) |
-| `run_talk.sh` | Launcher with API keys (runs on robot) |
-| `audio.py` | SDK-based audio (for wired mode) |
-| `wake.sh` | Wake up the robot |
-| `sleep.sh` | Put robot to sleep |
+| `talk_wireless.py` | Main voice agent (runs on robot) |
+| `tools.py` | AI-callable tools (Spotify, animations, etc.) |
+| `simple_bridge.py` | Audio playback bridge (WAV → speaker via dmix) |
+| `relay_server.py` | Mac-side relay (LLM proxy, Spotify, Telegram) |
+| `vision.py` | Face recognition system |
+| `memory.py` | Honcho memory integration |
+| `.env.example` | Configuration template |
+
+## Audio Notes
+
+- The Reachy daemon holds exclusive access to the audio device (`hw:0,0`)
+- The bridge uses `reachymini_audio_sink` (ALSA dmix) for shared playback
+- TTS audio is converted to stereo 16kHz via ffmpeg before playing
+- Microphone input uses `reachymini_audio_src` (dsnoop)
 
 ## Troubleshooting
 
-### "Device or resource busy"
-The daemon is using the audio device. Kill it first:
-```bash
-ssh pollen@ROBOT_IP 'kill -9 $(fuser /dev/snd/* 2>/dev/null | head -1)'
-```
+### "Transcription error: All connection attempts failed"
+STT server is unreachable. Check the `STT_ENDPOINT` in your config — it may be on a different machine than your Mac.
 
-### RMS shows 0.000
-Audio device name might be wrong. Check with:
+### "No response from OpenClaw"
+The `/v1/chat/completions` endpoint isn't enabled or the relay can't reach OpenClaw. Verify:
 ```bash
-ssh pollen@ROBOT_IP 'arecord -l'
+curl -X POST http://localhost:18789/v1/chat/completions \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"claude-sonnet-4-20250514","messages":[{"role":"user","content":"hi"}]}'
 ```
-
-### "Chat error" / 500 from Clawdbot
-OpenClaw session lock. Clear it:
-```bash
-rm -f ~/.openclaw/agents/main/sessions/sessions.json.lock
-```
-Then restart `openclaw gateway`.
 
 ### No audio output
-Check volume:
+The bridge may be using the wrong ALSA device. Check:
 ```bash
-curl http://ROBOT_IP:8000/api/volume/current
-curl -X POST http://ROBOT_IP:8000/api/volume/set -d '{"volume": 100}'
+aplay -L | grep reachy  # Should show reachymini_audio_sink
+curl http://reachy-mini.local:8000/api/volume/current  # Should be 100
+curl -X POST http://reachy-mini.local:8000/api/volume/test-sound  # Test beep
 ```
 
-## Alternative: Gradio Mode
-
-If you prefer browser-based interaction, the Gradio conversation app is also available. See the `/pollen_app` directory for the modified Pollen conversation app with Clawdbot integration.
-
+### "Device or resource busy"
+Something else is holding the audio device. Check with:
 ```bash
-# Start conversation app on robot
-curl -X POST "http://ROBOT_IP:8000/api/apps/start-app/reachy_mini_conversation_app"
-
-# Get Gradio URL from logs
-ssh pollen@ROBOT_IP 'journalctl -u reachy-mini-daemon -f | grep gradio'
+fuser /dev/snd/*
 ```
+
+## Credits
+
+- **[Kaya Jones](https://github.com/kayacancode)** — Original creator
+- Built with [OpenClaw](https://github.com/openclaw/openclaw), [Honcho](https://honcho.dev), [ElevenLabs](https://elevenlabs.io), and [Pollen Robotics](https://www.pollen-robotics.com)
 
 ## License
 
 MIT
-
-## Credits
-
-Built with Claude + OpenClaw
